@@ -36,15 +36,20 @@ async def fetch_athlete_profile(email: str, password: str) -> dict[str, Any]:
     # Lactate threshold HR
     try:
         lt = await asyncio.to_thread(client.get_lactate_threshold)
+        print(f"[garmin] raw lactate threshold: {lt}")
         hr = lt.get("speed_and_heart_rate", {}).get("heartRate")
         if hr:
             profile["threshold_hr"] = int(hr)
+            print(f"[garmin] threshold HR: {hr}")
+        else:
+            print(f"[garmin] threshold HR not available (heartRate={hr})")
     except Exception as exc:
         print(f"[garmin] Could not fetch lactate threshold: {exc}")
 
     # Max HR + VO2max from max metrics
     try:
         metrics = await asyncio.to_thread(client.get_max_metrics, today_str)
+        print(f"[garmin] raw max metrics: {metrics}")
         if isinstance(metrics, list) and metrics:
             generic = metrics[0].get("generic", {})
             if generic.get("maxHeartRate"):
@@ -53,29 +58,48 @@ async def fetch_athlete_profile(email: str, password: str) -> dict[str, Any]:
                 profile["vo2max"] = round(float(generic["vo2MaxPreciseValue"]), 1)
             elif generic.get("vo2MaxValue"):
                 profile["vo2max"] = round(float(generic["vo2MaxValue"]), 1)
+            print(f"[garmin] max HR: {profile.get('max_hr')}, VO2max: {profile.get('vo2max')}")
     except Exception as exc:
         print(f"[garmin] Could not fetch max metrics: {exc}")
 
     # Fitness age
     try:
         fa = await asyncio.to_thread(client.get_fitnessage_data, today_str)
-        if fa and fa.get("chronologicalAge") and fa.get("biologicalAge"):
-            profile["fitness_age"] = int(fa["biologicalAge"])
-            profile["chronological_age"] = int(fa["chronologicalAge"])
+        age = fa.get("fitnessAge") or fa.get("biologicalAge") if fa else None
+        if age is not None:
+            profile["fitness_age"] = int(age)
+            print(f"[garmin] fitness age: {profile['fitness_age']}")
+        else:
+            print(f"[garmin] fitness age not available")
     except Exception as exc:
         print(f"[garmin] Could not fetch fitness age: {exc}")
 
-    # Race predictions
+    # Race predictions — Garmin returns a flat dict with time5K/time10K/timeHalfMarathon/timeMarathon
+    _RACE_KEY_MAP = {
+        "time5K": "5k",
+        "time10K": "10k",
+        "timeHalfMarathon": "half_marathon",
+        "timeMarathon": "marathon",
+    }
     try:
         preds = await asyncio.to_thread(client.get_race_predictions)
         races = {}
-        for p in (preds if isinstance(preds, list) else [preds]):
-            t = p.get("raceType") or p.get("type", "")
-            secs = p.get("timeInSeconds") or p.get("predictedTimeInSeconds")
-            if t and secs:
-                races[t.lower()] = int(secs)
+        if isinstance(preds, dict):
+            for garmin_key, our_key in _RACE_KEY_MAP.items():
+                secs = preds.get(garmin_key)
+                if secs:
+                    races[our_key] = int(secs)
+        elif isinstance(preds, list):
+            for p in preds:
+                t = p.get("raceType") or p.get("type", "")
+                secs = p.get("timeInSeconds") or p.get("predictedTimeInSeconds")
+                if t and secs:
+                    races[t.lower()] = int(secs)
         if races:
             profile["race_predictions"] = races
+            print(f"[garmin] race predictions: { {k: v for k, v in races.items()} }")
+        else:
+            print(f"[garmin] race predictions: none extracted")
     except Exception as exc:
         print(f"[garmin] Could not fetch race predictions: {exc}")
 
