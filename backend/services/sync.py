@@ -6,8 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from integrations import strava
 from integrations.garmin_unofficial import (
-    fetch_daily_wellness, fetch_hrv, fetch_activities,
-    normalize_garmin_activity, extract_daily_metrics,
+    fetch_athlete_profile, fetch_daily_wellness, fetch_daily_extras,
+    fetch_hrv, fetch_activities, normalize_garmin_activity, extract_daily_metrics,
 )
 from models.activity import Activity
 from models.athlete import Athlete
@@ -69,14 +69,45 @@ async def sync_garmin_activities(athlete: Athlete, db: AsyncSession, days: int =
     end = date_type.today()
     start = end - timedelta(days=days)
 
+    # Sync profile metrics from Garmin (always overwrite with Garmin's measured values)
+    garmin_profile = await fetch_athlete_profile(athlete.garmin_email, password)
+    for field in ("threshold_hr", "max_hr", "vo2max", "fitness_age", "race_predictions"):
+        value = garmin_profile.get(field)
+        if value is not None:
+            setattr(athlete, field, value)
+    if garmin_profile:
+        keys = [k for k in garmin_profile if garmin_profile[k] is not None]
+        print(f"[garmin] profile synced: {', '.join(keys)}")
+
+    await db.commit()  # persist threshold/max HR before processing activities
+
     print(f"[garmin] Fetching activities for {athlete.id} ({start} → {end})")
     raw_activities = await fetch_activities(athlete.garmin_email, password, start, end)
 
     upserted = 0
+    tss_from_hr = 0
     for raw in raw_activities:
         normalized = normalize_garmin_activity(raw, athlete.id)
         if not normalized["start_time"]:
             continue
+
+        # Fall back to HR-based TSS when Garmin's activityTrainingLoad is absent
+        if normalized["tss"] is None and normalized.get("avg_hr") and normalized.get("duration_sec"):
+            # Use threshold HR if set; otherwise estimate from max HR (85%) or a typical default
+            thr = (
+                float(athlete.threshold_hr)
+                if athlete.threshold_hr
+                else float(athlete.max_hr) * 0.85
+                if athlete.max_hr
+                else None
+            )
+            if thr:
+                normalized["tss"] = calculate_tss_from_hr(
+                    normalized["duration_sec"],
+                    normalized["avg_hr"],
+                    thr,
+                )
+                tss_from_hr += 1
 
         existing = await db.get(Activity, normalized["id"])
         if existing:
@@ -107,9 +138,10 @@ async def sync_athlete_garmin(athlete: Athlete, db: AsyncSession, days: int = 30
 
     wellness_list = await fetch_daily_wellness(athlete.garmin_email, password, start, end)
     hrv_list = await fetch_hrv(athlete.garmin_email, password, start, end)
+    extras_list = await fetch_daily_extras(athlete.garmin_email, password, start, end)
 
-    # Index HRV by date string for easy lookup
     hrv_by_date = {item["date"]: item["data"] for item in hrv_list}
+    extras_by_date = {item["date"]: item for item in extras_list}
 
     updated = 0
     for item in wellness_list:
@@ -121,7 +153,6 @@ async def sync_athlete_garmin(athlete: Athlete, db: AsyncSession, days: int = 30
         record_id = f"{athlete.id}_{day_str}"
         record = await db.get(DailyMetrics, record_id)
         if not record:
-            # Create a stub record if no training load exists for this day
             record = DailyMetrics(
                 id=record_id,
                 athlete_id=athlete.id,
@@ -133,6 +164,14 @@ async def sync_athlete_garmin(athlete: Athlete, db: AsyncSession, days: int = 30
         for field, value in metrics.items():
             if value is not None:
                 setattr(record, field, value)
+
+        # Merge training status + endurance score
+        extras = extras_by_date.get(day_str, {})
+        if extras.get("training_status"):
+            record.training_status = extras["training_status"]
+        if extras.get("endurance_score") is not None:
+            record.endurance_score = float(extras["endurance_score"])
+
         updated += 1
 
     await db.commit()
@@ -191,7 +230,7 @@ async def recalculate_training_load(athlete_id: str, db: AsyncSession) -> None:
     if not rows:
         return
 
-    daily_tss = {row.day: float(row.daily_tss) for row in rows}
+    daily_tss = {date_type.fromisoformat(row.day): float(row.daily_tss) for row in rows}
     load_by_date = calculate_training_load(daily_tss)
 
     for d, metrics in load_by_date.items():

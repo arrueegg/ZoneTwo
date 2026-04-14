@@ -33,3 +33,7 @@ class DailyMetrics(Base):
     stress_avg = Column(Float)
     spo2_avg = Column(Float)
     respiration_avg = Column(Float)
+
+    # Garmin-derived performance metrics
+    training_status = Column(String)     # e.g. "PRODUCTIVE", "MAINTAINING", "RECOVERY"
+    endurance_score = Column(Float)

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Float, DateTime
+from sqlalchemy import Column, String, Integer, Float, DateTime, JSON
 from sqlalchemy.sql import func
 
 from database import Base
@@ -16,6 +16,9 @@ class Athlete(Base):
     max_hr = Column(Integer)
     threshold_hr = Column(Integer)  # lactate threshold HR for TSS calculation
     weekly_km = Column(Float)       # recent weekly volume, updated on sync
+    vo2max = Column(Float)
+    fitness_age = Column(Integer)
+    race_predictions = Column(JSON)  # {\"5k\": secs, \"10k\": secs, ...}
 
     # Training goals
     goal = Column(String)           # e.g. "marathon sub-3:30"

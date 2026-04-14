@@ -76,18 +76,19 @@ async def get_weekly_summary(
 @router.post("/weekly-summary")
 async def generate_weekly_summary(
     athlete_id: str = Query(...),
+    force: bool = Query(False),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """
     Generate (or refresh) the AI weekly coaching summary and cache it.
-    Refuse if the cached version is less than 7 days old to avoid burning credits.
+    Pass force=true to regenerate even if a fresh cached version exists.
     """
     athlete = await db.get(Athlete, athlete_id)
     if not athlete:
         raise HTTPException(status_code=404, detail="Athlete not found")
 
-    # Serve cache if fresh
-    if athlete.ai_summary and athlete.ai_summary_generated_at:
+    # Serve cache if fresh and not forced
+    if not force and athlete.ai_summary and athlete.ai_summary_generated_at:
         age = datetime.now(timezone.utc) - athlete.ai_summary_generated_at.replace(tzinfo=timezone.utc)
         if age < _AI_SUMMARY_TTL:
             return {
@@ -107,7 +108,9 @@ async def generate_weekly_summary(
     if not rows:
         raise HTTPException(status_code=400, detail="No metrics data available yet")
 
+    # Use most recent wellness row, but find CTL/ATL/TSB from the last row that has it
     latest = rows[0]
+    latest_load = next((r for r in rows if r.ctl is not None), None)
 
     # Pull last 7 days of activities for volume stats
     week_start = datetime.now(timezone.utc) - timedelta(days=7)
@@ -152,9 +155,9 @@ async def generate_weekly_summary(
         "distance_km": total_dist_km,
         "duration_hours": total_hours,
         "zone_distribution": zone_str,
-        "atl": latest.atl or 0,
-        "ctl": latest.ctl or 0,
-        "tsb": latest.tsb or 0,
+        "atl": (latest_load.atl if latest_load else None) or 0,
+        "ctl": (latest_load.ctl if latest_load else None) or 0,
+        "tsb": (latest_load.tsb if latest_load else None) or 0,
         "hrv_trend": round(avg_hrv, 1) if avg_hrv else "not available",
         "avg_sleep_score": f"{avg_sleep:.1f}h" if avg_sleep else "not available",
     }

@@ -133,32 +133,51 @@ async def metrics_summary(
     athlete_id: str = Query(...),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """Return the most recent metrics snapshot for an athlete."""
-    result = await db.execute(
+    """
+    Return the most recent wellness snapshot merged with the most recent CTL/ATL/TSB.
+    Wellness (HRV, sleep, etc.) and training load often land on different rows —
+    the last training day may not be today, and today may have no activity.
+    """
+    # Most recent wellness data (today or yesterday)
+    wellness_result = await db.execute(
         select(DailyMetrics)
         .where(DailyMetrics.athlete_id == athlete_id)
         .order_by(DailyMetrics.date.desc())
         .limit(1)
     )
-    today = result.scalar_one_or_none()
-    if not today:
+    latest = wellness_result.scalar_one_or_none()
+    if not latest:
         return {}
 
+    # Most recent row that has CTL (may differ from the wellness row)
+    load_result = await db.execute(
+        select(DailyMetrics)
+        .where(
+            DailyMetrics.athlete_id == athlete_id,
+            DailyMetrics.ctl.is_not(None),
+        )
+        .order_by(DailyMetrics.date.desc())
+        .limit(1)
+    )
+    latest_load = load_result.scalar_one_or_none()
+
     return {
-        "date": today.date.isoformat(),
-        "ctl": today.ctl,
-        "atl": today.atl,
-        "tsb": today.tsb,
-        "daily_tss": today.daily_tss,
-        "hrv_rmssd": today.hrv_rmssd,
-        "resting_hr": today.resting_hr,
-        "sleep_hours": today.sleep_hours,
-        "body_battery_high": today.body_battery_high,
-        "body_battery_low": today.body_battery_low,
-        "body_battery_wake": today.body_battery_wake,
-        "steps": today.steps,
-        "stress_avg": today.stress_avg,
-        "spo2_avg": today.spo2_avg,
-        "respiration_avg": today.respiration_avg,
-        "readiness_score": today.readiness_score,
+        "date": latest.date.isoformat(),
+        "ctl": latest_load.ctl if latest_load else None,
+        "atl": latest_load.atl if latest_load else None,
+        "tsb": latest_load.tsb if latest_load else None,
+        "daily_tss": latest_load.daily_tss if latest_load else None,
+        "hrv_rmssd": latest.hrv_rmssd,
+        "resting_hr": latest.resting_hr,
+        "sleep_hours": latest.sleep_hours,
+        "body_battery_high": latest.body_battery_high,
+        "body_battery_low": latest.body_battery_low,
+        "body_battery_wake": latest.body_battery_wake,
+        "steps": latest.steps,
+        "stress_avg": latest.stress_avg,
+        "spo2_avg": latest.spo2_avg,
+        "respiration_avg": latest.respiration_avg,
+        "readiness_score": latest.readiness_score,
+        "training_status": latest.training_status,
+        "endurance_score": latest.endurance_score,
     }

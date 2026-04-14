@@ -25,6 +25,102 @@ async def get_client(email: str, password: str) -> Garmin:
     return await asyncio.to_thread(_login, email, password)
 
 
+async def fetch_athlete_profile(email: str, password: str) -> dict[str, Any]:
+    """
+    Fetch profile metrics from Garmin: threshold HR, max HR, VO2max, fitness age, race predictions.
+    """
+    client = await get_client(email, password)
+    today_str = date.today().isoformat()
+    profile: dict[str, Any] = {}
+
+    # Lactate threshold HR
+    try:
+        lt = await asyncio.to_thread(client.get_lactate_threshold)
+        hr = lt.get("speed_and_heart_rate", {}).get("heartRate")
+        if hr:
+            profile["threshold_hr"] = int(hr)
+    except Exception as exc:
+        print(f"[garmin] Could not fetch lactate threshold: {exc}")
+
+    # Max HR + VO2max from max metrics
+    try:
+        metrics = await asyncio.to_thread(client.get_max_metrics, today_str)
+        if isinstance(metrics, list) and metrics:
+            generic = metrics[0].get("generic", {})
+            if generic.get("maxHeartRate"):
+                profile["max_hr"] = int(generic["maxHeartRate"])
+            if generic.get("vo2MaxPreciseValue"):
+                profile["vo2max"] = round(float(generic["vo2MaxPreciseValue"]), 1)
+            elif generic.get("vo2MaxValue"):
+                profile["vo2max"] = round(float(generic["vo2MaxValue"]), 1)
+    except Exception as exc:
+        print(f"[garmin] Could not fetch max metrics: {exc}")
+
+    # Fitness age
+    try:
+        fa = await asyncio.to_thread(client.get_fitnessage_data, today_str)
+        if fa and fa.get("chronologicalAge") and fa.get("biologicalAge"):
+            profile["fitness_age"] = int(fa["biologicalAge"])
+            profile["chronological_age"] = int(fa["chronologicalAge"])
+    except Exception as exc:
+        print(f"[garmin] Could not fetch fitness age: {exc}")
+
+    # Race predictions
+    try:
+        preds = await asyncio.to_thread(client.get_race_predictions)
+        races = {}
+        for p in (preds if isinstance(preds, list) else [preds]):
+            t = p.get("raceType") or p.get("type", "")
+            secs = p.get("timeInSeconds") or p.get("predictedTimeInSeconds")
+            if t and secs:
+                races[t.lower()] = int(secs)
+        if races:
+            profile["race_predictions"] = races
+    except Exception as exc:
+        print(f"[garmin] Could not fetch race predictions: {exc}")
+
+    return profile
+
+
+async def fetch_daily_extras(
+    email: str, password: str, start: date, end: date
+) -> list[dict[str, Any]]:
+    """
+    Fetch daily training status and endurance score for each day in the range.
+    """
+    client = await get_client(email, password)
+    results = []
+    current = start
+    from datetime import timedelta
+
+    while current <= end:
+        day_str = current.isoformat()
+        entry: dict[str, Any] = {"date": day_str}
+
+        try:
+            ts = await asyncio.to_thread(client.get_training_status, day_str)
+            if ts:
+                entry["training_status"] = ts.get("trainingStatus") or ts.get("latestTrainingStatusRecord", {}).get("trainingStatus")
+                entry["training_load_balance"] = ts.get("trainingLoadBalance")
+        except Exception:
+            pass
+
+        try:
+            es = await asyncio.to_thread(client.get_endurance_score, day_str)
+            if isinstance(es, list) and es:
+                entry["endurance_score"] = es[0].get("value") or es[0].get("enduranceScoreValue")
+            elif isinstance(es, dict):
+                entry["endurance_score"] = es.get("value") or es.get("enduranceScoreValue")
+        except Exception:
+            pass
+
+        if len(entry) > 1:
+            results.append(entry)
+        current += timedelta(days=1)
+
+    return results
+
+
 async def fetch_daily_wellness(
     email: str, password: str, start: date, end: date
 ) -> list[dict[str, Any]]:

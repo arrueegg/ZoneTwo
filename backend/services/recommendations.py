@@ -64,18 +64,62 @@ def generate_rule_based_insights(
     return insights
 
 
+_KEYS = ("week_summary", "training_recommendation", "recovery_insight")
+
+
 def _extract_json(text: str) -> dict[str, str]:
     """
-    Pull the first JSON object out of the model response.
-    Falls back to wrapping the whole text if no JSON block is found.
+    Pull a structured summary dict from the model response.
+
+    Priority:
+    1. Valid JSON object with quoted values
+    2. JSON-like object where values are unquoted bullet lines (model omits quotes)
+    3. Markdown bold-header format: **Label:** content
+    4. Numbered list: 1. / 2. / 3.
+    5. Fallback: whole text as week_summary
     """
+    # 1. Try strict JSON — grab the outermost {...} block
     match = re.search(r"\{[\s\S]*\}", text)
     if match:
         try:
-            return json.loads(match.group())
+            parsed = json.loads(match.group())
+            if isinstance(parsed, dict) and "week_summary" in parsed:
+                return {k: str(v).strip() for k, v in parsed.items()}
         except json.JSONDecodeError:
             pass
-    # Last resort: treat the whole response as the week summary
+
+        # 2. JSON-like with unquoted values: "key":\n•line\n•line
+        raw_block = match.group()
+        result: dict[str, str] = {}
+        for key in _KEYS:
+            # Match "key": followed by anything up to the next "key": or end of block
+            pattern = rf'"{key}"\s*:\s*(.*?)(?="(?:{"|".join(_KEYS)})"|\}})'
+            m = re.search(pattern, raw_block, re.DOTALL)
+            if m:
+                result[key] = m.group(1).strip().strip('",').strip()
+        if len(result) >= 2:
+            return {k: result.get(k, "") for k in _KEYS}
+
+    # 3. Markdown bold-header sections: **Some label:** text
+    bold_sections = re.findall(r"\*\*([^*]+?)\*\*[:\s]+(.*?)(?=\*\*|$)", text, re.DOTALL)
+    if len(bold_sections) >= 2:
+        parts = [s[1].strip().rstrip("*").strip() for s in bold_sections]
+        return {
+            "week_summary": parts[0] if len(parts) > 0 else "",
+            "training_recommendation": parts[1] if len(parts) > 1 else "",
+            "recovery_insight": parts[2] if len(parts) > 2 else "",
+        }
+
+    # 4. Numbered list
+    numbered = re.findall(r"(?:^|\n)\d+\.\s+(.+?)(?=\n\d+\.|\Z)", text, re.DOTALL)
+    if len(numbered) >= 2:
+        return {
+            "week_summary": numbered[0].strip(),
+            "training_recommendation": numbered[1].strip(),
+            "recovery_insight": numbered[2].strip() if len(numbered) > 2 else "",
+        }
+
+    # 5. Last resort
     return {"week_summary": text.strip(), "training_recommendation": "", "recovery_insight": ""}
 
 
@@ -89,34 +133,35 @@ async def generate_weekly_ai_summary(
     Returns a dict with keys: week_summary, training_recommendation, recovery_insight.
     Call this once per athlete per week.
     """
-    prompt = f"""Athlete profile: goal "{goal}", training for "{target_race}".
+    prompt = f"""Athlete goal: "{goal}", target race: "{target_race}".
 
-Last 7 days:
-- Distance: {week_data['distance_km']:.1f} km, Time: {week_data['duration_hours']:.1f} h
-- Zone distribution: {week_data['zone_distribution']}
-- ATL: {week_data['atl']:.1f}, CTL: {week_data['ctl']:.1f}, TSB: {week_data['tsb']:.1f}
-- HRV avg: {week_data['hrv_trend']}, Sleep avg: {week_data['avg_sleep_score']}
+Data (last 7 days):
+distance={week_data['distance_km']:.1f}km, time={week_data['duration_hours']:.1f}h, zones={week_data['zone_distribution']}
+ATL={week_data['atl']:.1f}, CTL={week_data['ctl']:.1f}, TSB={week_data['tsb']:.1f}
+HRV={week_data['hrv_trend']}, sleep={week_data['avg_sleep_score']}
 
-Reply with ONLY valid JSON — no explanation, no markdown, no code fences. Use exactly this structure:
-{{
-  "week_summary": "2-3 sentence summary of what the data shows about this week",
-  "training_recommendation": "one specific, actionable recommendation for next week based on the numbers",
-  "recovery_insight": "one insight about recovery based on HRV and sleep data"
-}}"""
+Output ONLY this JSON object, no other text:
+{{"week_summary":"• bullet 1\\n• bullet 2\\n• bullet 3","training_recommendation":"• bullet 1\\n• bullet 2","recovery_insight":"• bullet 1\\n• bullet 2"}}
+
+Rules:
+- Address the athlete directly as "you" (e.g. "Your HRV is...", "You spent...")
+- Each field is 2-3 short bullet points starting with "• "
+- Every bullet must reference specific numbers from the data
+- No markdown bold, no headers, no sentences without a number in them"""
 
     def _call() -> dict[str, str]:
         client = groq_lib.Groq(api_key=settings.groq_api_key)
         response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model="llama-3.3-70b-versatile",
             max_tokens=500,
+            temperature=0.3,
             messages=[
                 {
                     "role": "system",
                     "content": (
-                        "You are a data-driven endurance coach. "
-                        "Respond only with the JSON structure requested. "
-                        "Base every statement on the numbers provided. "
-                        "Never give generic advice."
+                        "You are a direct, data-driven endurance coach talking to your athlete. "
+                        "Output ONLY raw JSON — no markdown, no explanation, no code fences. "
+                        "Use bullet points starting with • and always address the athlete as 'you'."
                     ),
                 },
                 {"role": "user", "content": prompt},

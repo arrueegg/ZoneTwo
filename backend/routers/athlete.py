@@ -37,6 +37,9 @@ async def get_athlete(athlete_id: str, db: AsyncSession = Depends(get_db)):
         "garmin_connected": bool(athlete.garmin_email),
         "garmin_email": athlete.garmin_email,
         "target_ctl": athlete.target_ctl,
+        "vo2max": athlete.vo2max,
+        "fitness_age": athlete.fitness_age,
+        "race_predictions": athlete.race_predictions,
     }
 
 

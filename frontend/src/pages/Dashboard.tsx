@@ -139,6 +139,27 @@ export function Dashboard() {
           <InsightsPanel anomalies={[]} correlations={analysis.correlations} />
         </Section>
       ) : null}
+
+      {/* Glossary */}
+      <div style={{ borderTop: "1px solid #f3f4f6", paddingTop: 24, marginTop: 8 }}>
+        <h2 style={{ fontSize: 13, fontWeight: 600, color: "#9ca3af", marginBottom: 14, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          Glossary
+        </h2>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <GlossaryItem abbr="CTL" name="Chronic Training Load" color="#3B8BD4">
+            Your fitness. A 42-day exponential average of daily TSS. Builds slowly — expect +1–2 points per week of consistent training.
+          </GlossaryItem>
+          <GlossaryItem abbr="ATL" name="Acute Training Load" color="#E8593C">
+            Your fatigue. A 7-day exponential average of daily TSS. Responds quickly to hard weeks and drops fast during recovery.
+          </GlossaryItem>
+          <GlossaryItem abbr="TSB" name="Training Stress Balance" color="#1D9E75">
+            Your form. CTL minus ATL. Positive means rested and ready to race; negative means accumulated fatigue. The sweet spot for a key workout is −10 to +5.
+          </GlossaryItem>
+          <GlossaryItem abbr="TSS" name="Training Stress Score">
+            The load of a single session, scaled so that one hour at threshold effort = 100 TSS. Calculated from Garmin's activity training load or your HR vs. threshold HR.
+          </GlossaryItem>
+        </div>
+      </div>
     </div>
   );
 }
@@ -157,6 +178,25 @@ function Stat({ label, value }: { label: string; value: string | undefined }) {
     <div>
       <span style={{ color: "#9ca3af" }}>{label}: </span>
       <strong>{value ?? "—"}</strong>
+    </div>
+  );
+}
+
+function GlossaryItem({ abbr, name, color = "#6b7280", children }: {
+  abbr: string;
+  name: string;
+  color?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div style={{ display: "flex", gap: 12, fontSize: 13, lineHeight: 1.6 }}>
+      <div style={{ minWidth: 36, paddingTop: 1 }}>
+        <span style={{ fontWeight: 700, color }}>{abbr}</span>
+      </div>
+      <div>
+        <span style={{ fontWeight: 600, color: "#374151" }}>{name} — </span>
+        <span style={{ color: "#6b7280" }}>{children}</span>
+      </div>
     </div>
   );
 }
