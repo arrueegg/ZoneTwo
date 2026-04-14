@@ -21,6 +21,14 @@ export function Dashboard() {
   const { data: wellness = [] } = useWellness(athleteId ?? "", ninetyDaysAgo, today);
   const { data: summary } = useMetricsSummary(athleteId ?? "");
   const { data: analysis } = useAnalysis(athleteId ?? "");
+  const { data: athleteProfile } = useQuery<{ target_ctl: number | null }>({
+    queryKey: ["athlete-profile", athleteId],
+    queryFn: async () => {
+      const { data } = await api.get(`/athlete/${athleteId}`);
+      return data;
+    },
+    enabled: Boolean(athleteId),
+  });
   const { data: insights = [] } = useQuery<Insight[]>({
     queryKey: ["insights", athleteId],
     queryFn: async () => {
@@ -94,7 +102,7 @@ export function Dashboard() {
       <Section title={hasTrainingLoad ? "Performance Management Chart (90 days)" : "Training Load — no data yet"}>
         {loadLoading ? <p>Loading…</p> : hasTrainingLoad ? (
           <>
-            <TrainingLoadChart data={loadData} />
+            <TrainingLoadChart data={loadData} targetCtl={athleteProfile?.target_ctl} />
             <div style={{ display: "flex", gap: 24, marginTop: 12, fontSize: 14, color: "#374151" }}>
               <Stat label="CTL (fitness)" value={summary?.ctl?.toFixed(1)} />
               <Stat label="ATL (fatigue)" value={summary?.atl?.toFixed(1)} />

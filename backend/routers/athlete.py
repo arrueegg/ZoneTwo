@@ -18,6 +18,7 @@ class AthleteUpdate(BaseModel):
     max_hr: int | None = None
     goal: str | None = None
     target_race: str | None = None
+    target_ctl: int | None = None
 
 
 @router.get("/{athlete_id}")
@@ -35,6 +36,7 @@ async def get_athlete(athlete_id: str, db: AsyncSession = Depends(get_db)):
         "strava_connected": bool(athlete.strava_athlete_id),
         "garmin_connected": bool(athlete.garmin_email),
         "garmin_email": athlete.garmin_email,
+        "target_ctl": athlete.target_ctl,
     }
 
 

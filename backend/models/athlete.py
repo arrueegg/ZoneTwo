@@ -20,6 +20,7 @@ class Athlete(Base):
     # Training goals
     goal = Column(String)           # e.g. "marathon sub-3:30"
     target_race = Column(String)    # e.g. "Boston 2025"
+    target_ctl = Column(Integer)    # target fitness (CTL) to display as goal line on PMC
 
     # Strava OAuth tokens
     strava_athlete_id = Column(String, unique=True)

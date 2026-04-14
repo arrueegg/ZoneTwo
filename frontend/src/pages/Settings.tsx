@@ -10,6 +10,7 @@ interface AthleteProfile {
   max_hr: number | null;
   goal: string | null;
   target_race: string | null;
+  target_ctl: number | null;
   strava_connected: boolean;
   garmin_connected: boolean;
   garmin_email: string | null;
@@ -22,6 +23,7 @@ export function Settings() {
     max_hr: null,
     goal: null,
     target_race: null,
+    target_ctl: null,
     strava_connected: false,
     garmin_connected: false,
     garmin_email: null,
@@ -42,6 +44,7 @@ export function Settings() {
         max_hr: data.max_hr ?? null,
         goal: data.goal ?? null,
         target_race: data.target_race ?? null,
+        target_ctl: data.target_ctl ?? null,
         strava_connected: data.strava_connected ?? false,
         garmin_connected: data.garmin_connected ?? false,
         garmin_email: data.garmin_email ?? null,
@@ -225,6 +228,14 @@ export function Settings() {
               value={profile.target_race ?? ""}
               onChange={(v) => setProfile((p) => ({ ...p, target_race: v || null }))}
               placeholder="e.g. Boston 2026"
+            />
+            <Field
+              label="Target CTL (fitness goal)"
+              hint="Sets a goal line on the Performance Management Chart"
+              value={profile.target_ctl ?? ""}
+              onChange={(v) => setProfile((p) => ({ ...p, target_ctl: v ? parseInt(v) : null }))}
+              type="number"
+              placeholder="e.g. 70"
             />
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <button type="submit" style={primaryBtn}>Save</button>

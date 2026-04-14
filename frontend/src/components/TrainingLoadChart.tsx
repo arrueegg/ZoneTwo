@@ -15,7 +15,7 @@ interface Props {
   targetCtl?: number | null;
 }
 
-export function TrainingLoadChart({ data }: Props) {
+export function TrainingLoadChart({ data, targetCtl }: Props) {
   return (
     <div style={{ width: "100%", height: 300 }}>
       <ResponsiveContainer>
@@ -32,6 +32,16 @@ export function TrainingLoadChart({ data }: Props) {
           <Legend />
           {/* Form=0 baseline */}
           <ReferenceLine y={0} stroke="#aaa" strokeDasharray="3 3" />
+          {/* Target CTL goal line */}
+          {targetCtl != null && (
+            <ReferenceLine
+              y={targetCtl}
+              stroke="#3B8BD4"
+              strokeDasharray="6 3"
+              strokeOpacity={0.5}
+              label={{ value: `Goal ${targetCtl}`, fontSize: 10, fill: "#3B8BD4", position: "insideTopRight" }}
+            />
+          )}
           <Line
             type="monotone"
             dataKey="ctl"
