@@ -12,7 +12,7 @@ interface Props {
 }
 
 const ZONE_COLORS = ["#93c5fd", "#6ee7b7", "#fde68a", "#fca5a5", "#f87171"];
-const ZONE_LABELS = ["Z1 Recovery", "Z2 Aerobic", "Z3 Tempo", "Z4 Threshold", "Z5 VO2max"];
+const ZONE_LABELS = ["Z1 Warm-Up", "Z2 Endurance", "Z3 Aerobic", "Z4 Threshold", "Z5 VO2max"];
 
 function getWeekStart(date: Date): string {
   const d = new Date(date);
