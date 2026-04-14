@@ -1,5 +1,6 @@
 from datetime import datetime, timezone, timedelta
 from typing import Any
+import json
 
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,6 +39,20 @@ async def get_insights(
     return generate_rule_based_insights(today_metrics, week_ago_metrics)
 
 
+def _parse_cached_summary(raw: str | None) -> dict[str, str] | None:
+    """Parse a cached summary string — handles both old plain-text and new JSON format."""
+    if not raw:
+        return None
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        pass
+    # Legacy plain-text — wrap it so the frontend still gets something
+    return {"week_summary": raw, "training_recommendation": "", "recovery_insight": ""}
+
+
 @router.get("/weekly-summary")
 async def get_weekly_summary(
     athlete_id: str = Query(...),
@@ -47,11 +62,12 @@ async def get_weekly_summary(
     athlete = await db.get(Athlete, athlete_id)
     if not athlete:
         raise HTTPException(status_code=404, detail="Athlete not found")
-    if not athlete.ai_summary:
-        return {"summary": None, "generated_at": None, "stale": True}
+    parsed = _parse_cached_summary(athlete.ai_summary)
+    if not parsed:
+        return {"sections": None, "generated_at": None, "stale": True}
     age = datetime.now(timezone.utc) - athlete.ai_summary_generated_at.replace(tzinfo=timezone.utc)
     return {
-        "summary": athlete.ai_summary,
+        "sections": parsed,
         "generated_at": athlete.ai_summary_generated_at.isoformat(),
         "stale": age > _AI_SUMMARY_TTL,
     }
@@ -75,7 +91,7 @@ async def generate_weekly_summary(
         age = datetime.now(timezone.utc) - athlete.ai_summary_generated_at.replace(tzinfo=timezone.utc)
         if age < _AI_SUMMARY_TTL:
             return {
-                "summary": athlete.ai_summary,
+                "sections": _parse_cached_summary(athlete.ai_summary),
                 "generated_at": athlete.ai_summary_generated_at.isoformat(),
                 "stale": False,
             }
@@ -143,19 +159,19 @@ async def generate_weekly_summary(
         "avg_sleep_score": f"{avg_sleep:.1f}h" if avg_sleep else "not available",
     }
 
-    summary_text = await generate_weekly_ai_summary(
+    sections = await generate_weekly_ai_summary(
         goal=athlete.goal or "unspecified goal",
         target_race=athlete.target_race or "unspecified race",
         week_data=week_data,
     )
 
     now = datetime.now(timezone.utc)
-    athlete.ai_summary = summary_text
+    athlete.ai_summary = json.dumps(sections)
     athlete.ai_summary_generated_at = now
     await db.commit()
 
     return {
-        "summary": summary_text,
+        "sections": sections,
         "generated_at": now.isoformat(),
         "stale": False,
     }
