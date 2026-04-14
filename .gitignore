@@ -1,0 +1,28 @@
+# Environment
+.env
+.env.local
+
+# SQLite database
+*.db
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+*.egg-info/
+dist/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Docker
+*.log
+
+# OS
+.DS_Store
