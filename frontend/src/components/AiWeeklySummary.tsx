@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../api/client";
+import { SkeletonText } from "./Skeleton";
 
 interface SummaryResponse {
   summary: string | null;
@@ -44,7 +45,11 @@ export function AiWeeklySummary({ athleteId }: Props) {
     },
   });
 
-  if (isLoading) return null;
+  if (isLoading) return (
+    <div style={{ background: "#fafafa", border: "1px solid #e5e7eb", borderRadius: 8, padding: "16px 20px" }}>
+      <SkeletonText lines={4} />
+    </div>
+  );
 
   const hasSummary = data?.summary && !data.stale;
   const generatedDate = data?.generated_at ? new Date(data.generated_at).toLocaleDateString() : null;

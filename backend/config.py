@@ -19,8 +19,8 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "sqlite+aiosqlite:///./training_app.db"
 
-    # Anthropic
-    anthropic_api_key: str = ""
+    # Groq (free tier — https://console.groq.com)
+    groq_api_key: str = ""
 
     # App
     secret_key: str = "change-me"

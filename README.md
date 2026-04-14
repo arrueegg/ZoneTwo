@@ -18,7 +18,7 @@ cp .env.example .env
 Fill in `.env`:
 - `STRAVA_CLIENT_ID` / `STRAVA_CLIENT_SECRET` — from [strava.com/settings/api](https://www.strava.com/settings/api)
 - `SECRET_KEY` — generate with `python3 -c "import secrets; print(secrets.token_hex(32))"`
-- `ANTHROPIC_API_KEY` — only needed for the AI weekly debrief feature
+- `GROQ_API_KEY` — free, get one at [console.groq.com/keys](https://console.groq.com/keys). Needed for the AI weekly debrief.
 - Leave `DATABASE_URL` as-is for local SQLite
 
 ### 2. Backend

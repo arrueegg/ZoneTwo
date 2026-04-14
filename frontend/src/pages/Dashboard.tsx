@@ -5,6 +5,7 @@ import { RecommendationFeed } from "../components/RecommendationFeed";
 import { ReadinessChart } from "../components/ReadinessChart";
 import { InsightsPanel } from "../components/InsightsPanel";
 import { AiWeeklySummary } from "../components/AiWeeklySummary";
+import { SkeletonRecovery, SkeletonChart } from "../components/Skeleton";
 import { useTrainingLoad, useMetricsSummary } from "../hooks/useMetrics";
 import { useWellness } from "../hooks/useWellness";
 import { useAnalysis } from "../hooks/useAnalysis";
@@ -18,8 +19,8 @@ export function Dashboard() {
   const { athleteId } = useAthleteContext();
 
   const { data: loadData = [], isLoading: loadLoading } = useTrainingLoad(athleteId ?? "", ninetyDaysAgo, today);
-  const { data: wellness = [] } = useWellness(athleteId ?? "", ninetyDaysAgo, today);
-  const { data: summary } = useMetricsSummary(athleteId ?? "");
+  const { data: wellness = [], isLoading: wellnessLoading } = useWellness(athleteId ?? "", ninetyDaysAgo, today);
+  const { data: summary, isLoading: summaryLoading } = useMetricsSummary(athleteId ?? "");
   const { data: analysis } = useAnalysis(athleteId ?? "");
   const { data: athleteProfile } = useQuery<{ target_ctl: number | null }>({
     queryKey: ["athlete-profile", athleteId],
@@ -57,8 +58,10 @@ export function Dashboard() {
       <p style={{ color: "#6b7280", marginBottom: 32 }}>Training Analytics</p>
 
       {/* Today */}
-      {hasSummary && (
-        <Section title="Today">
+      <Section title="Today">
+        {summaryLoading ? (
+          <SkeletonRecovery />
+        ) : hasSummary ? (
           <div style={{ display: "flex", gap: 32, flexWrap: "wrap", alignItems: "flex-start" }}>
             <div style={{ flex: 1, minWidth: 280 }}>
               <RecoveryIndicator
@@ -81,8 +84,10 @@ export function Dashboard() {
               </div>
             )}
           </div>
-        </Section>
-      )}
+        ) : (
+          <p style={{ color: "#9ca3af", fontSize: 14 }}>No data yet — connect an account in <a href="/settings">Settings</a>.</p>
+        )}
+      </Section>
 
       {/* Anomaly flags */}
       {analysis?.anomalies?.length ? (
@@ -92,15 +97,15 @@ export function Dashboard() {
       ) : null}
 
       {/* Readiness trend */}
-      {wellness.some((d) => d.readiness_score != null) && (
+      {(wellnessLoading || wellness.some((d) => d.readiness_score != null)) && (
         <Section title="Readiness (90 days)">
-          <ReadinessChart data={wellness} />
+          {wellnessLoading ? <SkeletonChart height={220} /> : <ReadinessChart data={wellness} />}
         </Section>
       )}
 
       {/* PMC */}
-      <Section title={hasTrainingLoad ? "Performance Management Chart (90 days)" : "Training Load — no data yet"}>
-        {loadLoading ? <p>Loading…</p> : hasTrainingLoad ? (
+      <Section title="Performance Management Chart (90 days)">
+        {loadLoading ? <SkeletonChart height={300} /> : hasTrainingLoad ? (
           <>
             <TrainingLoadChart data={loadData} targetCtl={athleteProfile?.target_ctl} />
             <div style={{ display: "flex", gap: 24, marginTop: 12, fontSize: 14, color: "#374151" }}>
@@ -111,7 +116,7 @@ export function Dashboard() {
           </>
         ) : (
           <p style={{ color: "#9ca3af", fontSize: 14 }}>
-            Set your threshold HR in <a href="/settings">Settings</a> to calculate TSS from activities.
+            Sync your data from <a href="/settings">Settings</a> to see the PMC chart.
           </p>
         )}
       </Section>

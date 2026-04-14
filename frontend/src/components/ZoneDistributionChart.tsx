@@ -5,6 +5,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import api from "../api/client";
 import type { Activity } from "../api/client";
+import { SkeletonChart } from "./Skeleton";
 
 interface Props {
   athleteId: string;
@@ -31,7 +32,7 @@ export function ZoneDistributionChart({ athleteId }: Props) {
     enabled: Boolean(athleteId),
   });
 
-  if (isLoading) return <p style={{ color: "#9ca3af", fontSize: 14 }}>Loading…</p>;
+  if (isLoading) return <SkeletonChart height={280} />;
 
   // Group by week, sum zone minutes
   const weekMap = new Map<string, Record<string, number>>();

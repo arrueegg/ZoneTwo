@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useActivities } from "../hooks/useActivities";
 import { useAthleteContext } from "../main";
 import type { Activity } from "../api/client";
+import { SkeletonTableRows } from "../components/Skeleton";
 
 // ── formatting helpers ────────────────────────────────────────────────────────
 
@@ -146,15 +147,13 @@ export function Activities() {
       {/* Weekly summary */}
       <WeeklySummary activities={activities} />
 
-      {isLoading && <p style={{ color: "#9ca3af" }}>Loading…</p>}
-
       {!isLoading && activities.length === 0 && (
         <p style={{ color: "#9ca3af", fontSize: 14 }}>
           No activities yet. Trigger a sync from <a href="/settings">Settings</a>.
         </p>
       )}
 
-      {activities.length > 0 && (
+      {(isLoading || activities.length > 0) && (
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
@@ -171,7 +170,9 @@ export function Activities() {
               </tr>
             </thead>
             <tbody>
-              {activities.map((a) => (
+              {isLoading ? (
+                <SkeletonTableRows rows={8} cols={9} />
+              ) : activities.map((a) => (
                 <tr key={a.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
                   <td style={TD}>{fmtDate(a.start_time)}</td>
                   <td style={TD}>

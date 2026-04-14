@@ -8,6 +8,7 @@ import { RecoveryIndicator } from "../components/RecoveryIndicator";
 import { WeeklySummaryTable } from "../components/WeeklySummaryTable";
 import { InsightsPanel } from "../components/InsightsPanel";
 import { ZoneDistributionChart } from "../components/ZoneDistributionChart";
+import { SkeletonRecovery, SkeletonChart } from "../components/Skeleton";
 
 const today = new Date().toISOString().slice(0, 10);
 const ninetyDaysAgo = new Date(Date.now() - 90 * 86400_000).toISOString().slice(0, 10);
@@ -15,7 +16,7 @@ const ninetyDaysAgo = new Date(Date.now() - 90 * 86400_000).toISOString().slice(
 export function Wellness() {
   const { athleteId } = useAthleteContext();
   const { data: wellness = [], isLoading } = useWellness(athleteId ?? "", ninetyDaysAgo, today);
-  const { data: summary } = useMetricsSummary(athleteId ?? "");
+  const { data: summary, isLoading: summaryLoading } = useMetricsSummary(athleteId ?? "");
   const { data: analysis } = useAnalysis(athleteId ?? "");
 
   if (!athleteId) {
@@ -39,31 +40,37 @@ export function Wellness() {
       <p style={{ color: "#6b7280", marginBottom: 32 }}>Last 90 days · Garmin Connect</p>
 
       {/* Today snapshot */}
-      {hasSummary && (
-        <Section title="Today">
-          <RecoveryIndicator
-            hrv={summary.hrv_rmssd ?? null}
-            hrv7DayAvg={hrv7DayAvg}
-            restingHR={summary.resting_hr ?? null}
-            sleepScore={summary.sleep_hours ?? null}
-            sleepUnit="h"
-            bodyBatteryHigh={summary.body_battery_high ?? null}
-            bodyBatteryWake={summary.body_battery_wake ?? null}
-            stress={summary.stress_avg ?? null}
-          />
-          {summary.readiness_score != null && (
-            <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ fontSize: 13, color: "#6b7280" }}>Readiness score</span>
-              <ReadinessBadge score={summary.readiness_score} />
-            </div>
-          )}
-        </Section>
-      )}
+      <Section title="Today">
+        {summaryLoading ? (
+          <SkeletonRecovery />
+        ) : hasSummary ? (
+          <>
+            <RecoveryIndicator
+              hrv={summary.hrv_rmssd ?? null}
+              hrv7DayAvg={hrv7DayAvg}
+              restingHR={summary.resting_hr ?? null}
+              sleepScore={summary.sleep_hours ?? null}
+              sleepUnit="h"
+              bodyBatteryHigh={summary.body_battery_high ?? null}
+              bodyBatteryWake={summary.body_battery_wake ?? null}
+              stress={summary.stress_avg ?? null}
+            />
+            {summary.readiness_score != null && (
+              <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 12 }}>
+                <span style={{ fontSize: 13, color: "#6b7280" }}>Readiness score</span>
+                <ReadinessBadge score={summary.readiness_score} />
+              </div>
+            )}
+          </>
+        ) : (
+          <p style={{ color: "#9ca3af", fontSize: 14 }}>No data yet.</p>
+        )}
+      </Section>
 
       {/* Readiness trend */}
-      {wellness.some((d) => d.readiness_score != null) && (
+      {(isLoading || wellness.some((d) => d.readiness_score != null)) && (
         <Section title="Readiness Score (90 days)">
-          <ReadinessChart data={wellness} />
+          {isLoading ? <SkeletonChart height={220} /> : <ReadinessChart data={wellness} />}
         </Section>
       )}
 
@@ -92,13 +99,9 @@ export function Wellness() {
       )}
 
       {/* Raw charts */}
-      {isLoading ? (
-        <p style={{ color: "#9ca3af" }}>Loading…</p>
-      ) : (
-        <Section title="All Metrics">
-          <WellnessCharts data={wellness} />
-        </Section>
-      )}
+      <Section title="All Metrics">
+        {isLoading ? <SkeletonChart height={300} /> : <WellnessCharts data={wellness} />}
+      </Section>
     </div>
   );
 }
