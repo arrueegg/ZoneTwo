@@ -5,6 +5,7 @@ import { RecommendationFeed } from "../components/RecommendationFeed";
 import { ReadinessChart } from "../components/ReadinessChart";
 import { InsightsPanel } from "../components/InsightsPanel";
 import { AiWeeklySummary } from "../components/AiWeeklySummary";
+import { RacePredictions } from "../components/RacePredictions";
 import { SkeletonRecovery, SkeletonChart } from "../components/Skeleton";
 import { useTrainingLoad, useMetricsSummary } from "../hooks/useMetrics";
 import { useWellness } from "../hooks/useWellness";
@@ -22,7 +23,12 @@ export function Dashboard() {
   const { data: wellness = [], isLoading: wellnessLoading } = useWellness(athleteId ?? "", ninetyDaysAgo, today);
   const { data: summary, isLoading: summaryLoading } = useMetricsSummary(athleteId ?? "");
   const { data: analysis } = useAnalysis(athleteId ?? "");
-  const { data: athleteProfile } = useQuery<{ target_ctl: number | null }>({
+  const { data: athleteProfile } = useQuery<{
+    target_ctl: number | null;
+    vo2max: number | null;
+    fitness_age: number | null;
+    race_predictions: Record<string, number> | null;
+  }>({
     queryKey: ["athlete-profile", athleteId],
     queryFn: async () => {
       const { data } = await api.get(`/athlete/${athleteId}`);
@@ -125,6 +131,17 @@ export function Dashboard() {
       {insights.length > 0 && (
         <Section title="Coaching Insights">
           <RecommendationFeed insights={insights} />
+        </Section>
+      )}
+
+      {/* Performance metrics from Garmin */}
+      {athleteProfile && (athleteProfile.race_predictions || athleteProfile.vo2max != null || athleteProfile.fitness_age != null) && (
+        <Section title="Performance">
+          <RacePredictions
+            predictions={athleteProfile.race_predictions ?? {}}
+            vo2max={athleteProfile.vo2max}
+            fitnessAge={athleteProfile.fitness_age}
+          />
         </Section>
       )}
 
