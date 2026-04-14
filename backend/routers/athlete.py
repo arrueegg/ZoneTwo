@@ -8,7 +8,7 @@ from models.activity import Activity
 from models.athlete import Athlete
 from services.crypto import encrypt, decrypt
 from services.metrics import calculate_tss_from_hr
-from services.sync import recalculate_training_load, sync_athlete_garmin
+from services.sync import recalculate_training_load, sync_garmin_activities, sync_athlete_garmin
 
 router = APIRouter(prefix="/athlete", tags=["athlete"])
 
@@ -142,9 +142,31 @@ async def disconnect_garmin(athlete_id: str, db: AsyncSession = Depends(get_db))
     return {"status": "disconnected"}
 
 
+@router.post("/{athlete_id}/sync")
+async def trigger_sync(
+    athlete_id: str,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """Kick off a full re-sync (activities + wellness + training load) in the background."""
+    athlete = await db.get(Athlete, athlete_id)
+    if not athlete:
+        raise HTTPException(status_code=404, detail="Athlete not found")
+    background_tasks.add_task(_full_sync, athlete_id)
+    return {"status": "sync_started"}
+
+
 async def _garmin_sync(athlete_id: str) -> None:
+    await _full_sync(athlete_id)
+
+
+async def _full_sync(athlete_id: str) -> None:
     async with SessionLocal() as db:
         athlete = await db.get(Athlete, athlete_id)
         if not athlete:
             return
+        if athlete.garmin_email:
+            await sync_garmin_activities(athlete, db, days=90)
         await sync_athlete_garmin(athlete, db, days=90)
+        await recalculate_training_load(athlete_id, db)
+        print(f"[sync] Full sync complete for {athlete_id}")

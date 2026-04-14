@@ -7,6 +7,7 @@ import { ReadinessChart } from "../components/ReadinessChart";
 import { RecoveryIndicator } from "../components/RecoveryIndicator";
 import { WeeklySummaryTable } from "../components/WeeklySummaryTable";
 import { InsightsPanel } from "../components/InsightsPanel";
+import { ZoneDistributionChart } from "../components/ZoneDistributionChart";
 
 const today = new Date().toISOString().slice(0, 10);
 const ninetyDaysAgo = new Date(Date.now() - 90 * 86400_000).toISOString().slice(0, 10);
@@ -82,6 +83,13 @@ export function Wellness() {
           <WeeklySummaryTable weeks={analysis.weekly_summary} />
         </Section>
       ) : null}
+
+      {/* HR zone distribution */}
+      {athleteId && (
+        <Section title="HR Zone Distribution (last 12 weeks)">
+          <ZoneDistributionChart athleteId={athleteId} />
+        </Section>
+      )}
 
       {/* Raw charts */}
       {isLoading ? (

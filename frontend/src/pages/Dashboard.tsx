@@ -4,6 +4,7 @@ import { RecoveryIndicator } from "../components/RecoveryIndicator";
 import { RecommendationFeed } from "../components/RecommendationFeed";
 import { ReadinessChart } from "../components/ReadinessChart";
 import { InsightsPanel } from "../components/InsightsPanel";
+import { AiWeeklySummary } from "../components/AiWeeklySummary";
 import { useTrainingLoad, useMetricsSummary } from "../hooks/useMetrics";
 import { useWellness } from "../hooks/useWellness";
 import { useAnalysis } from "../hooks/useAnalysis";
@@ -107,12 +108,17 @@ export function Dashboard() {
         )}
       </Section>
 
-      {/* Coaching insights */}
+      {/* Rule-based coaching insights */}
       {insights.length > 0 && (
         <Section title="Coaching Insights">
           <RecommendationFeed insights={insights} />
         </Section>
       )}
+
+      {/* AI weekly summary */}
+      <Section title="Weekly AI Debrief">
+        <AiWeeklySummary athleteId={athleteId} />
+      </Section>
 
       {/* Correlations */}
       {analysis?.correlations?.length ? (

@@ -32,5 +32,9 @@ class Athlete(Base):
     garmin_email = Column(String)
     garmin_password_encrypted = Column(String)  # encrypted with SECRET_KEY
 
+    # Cached AI weekly summary (regenerated at most once per week)
+    ai_summary = Column(String)
+    ai_summary_generated_at = Column(DateTime)
+
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

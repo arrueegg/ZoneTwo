@@ -27,6 +27,8 @@ export function Settings() {
     garmin_email: null,
   });
   const [saved, setSaved] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState("");
   const [garminEmail, setGarminEmail] = useState("");
   const [garminPassword, setGarminPassword] = useState("");
   const [garminStatus, setGarminStatus] = useState<"idle" | "loading" | "error">("idle");
@@ -89,6 +91,20 @@ export function Settings() {
   async function handleGarminDisconnect() {
     await api.delete(`/athlete/${athleteId}/garmin`);
     setProfile((p) => ({ ...p, garmin_connected: false, garmin_email: null }));
+  }
+
+  async function handleSync() {
+    if (!athleteId) return;
+    setSyncing(true);
+    setSyncMsg("");
+    try {
+      await api.post(`/athlete/${athleteId}/sync`);
+      setSyncMsg("Sync started — data will update in the background.");
+    } catch {
+      setSyncMsg("Sync failed. Check the backend logs.");
+    } finally {
+      setSyncing(false);
+    }
   }
 
   return (
@@ -165,6 +181,20 @@ export function Settings() {
           </form>
         )}
       </Section>
+
+      {athleteId && (
+        <Section title="Sync Data">
+          <p style={{ fontSize: 14, color: "#6b7280", marginBottom: 12 }}>
+            Pull the latest activities and wellness data from your connected sources.
+          </p>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <button onClick={handleSync} disabled={syncing} style={{ ...primaryBtn, opacity: syncing ? 0.6 : 1 }}>
+              {syncing ? "Starting…" : "Sync Now"}
+            </button>
+            {syncMsg && <span style={{ fontSize: 13, color: syncMsg.includes("failed") ? "#dc2626" : "#065f46" }}>{syncMsg}</span>}
+          </div>
+        </Section>
+      )}
 
       {athleteId && (
         <Section title="Training Profile">

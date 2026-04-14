@@ -12,6 +12,7 @@ import type { MetricPoint } from "../api/client";
 
 interface Props {
   data: MetricPoint[];
+  targetCtl?: number | null;
 }
 
 export function TrainingLoadChart({ data }: Props) {
