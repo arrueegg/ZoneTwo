@@ -81,14 +81,30 @@ export function Dashboard() {
                 stress={summary.stress_avg ?? null}
               />
             </div>
-            {summary.readiness_score != null && (
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 11, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
-                  Readiness
-                </div>
-                <ReadinessBadge score={summary.readiness_score} />
-              </div>
-            )}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-start" }}>
+              {summary.readiness_score != null && (
+                <TileCard label="Readiness">
+                  <ReadinessBadge score={summary.readiness_score} />
+                </TileCard>
+              )}
+              {summary.training_readiness_score != null && (
+                <TileCard label="Garmin Readiness">
+                  <ReadinessBadge score={summary.training_readiness_score} />
+                </TileCard>
+              )}
+              {summary.training_status && (
+                <TileCard label="Training Status">
+                  <TrainingStatusBadge status={summary.training_status} />
+                </TileCard>
+              )}
+              {summary.endurance_score != null && (
+                <TileCard label="Endurance Score">
+                  <span style={{ fontSize: 22, fontWeight: 700, color: "#10b981" }}>
+                    {summary.endurance_score.toFixed(1)}
+                  </span>
+                </TileCard>
+              )}
+            </div>
           </div>
         ) : (
           <p style={{ color: "#9ca3af", fontSize: 14 }}>No data yet — connect an account in <a href="/settings">Settings</a>.</p>
@@ -215,6 +231,36 @@ function GlossaryItem({ abbr, name, color = "#6b7280", children }: {
         <span style={{ color: "#6b7280" }}>{children}</span>
       </div>
     </div>
+  );
+}
+
+function TileCard({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ textAlign: "center" }}>
+      <div style={{ fontSize: 11, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
+        {label}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+const TRAINING_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  PRODUCTIVE:   { label: "Productive",   color: "#065f46", bg: "#d1fae5" },
+  MAINTAINING:  { label: "Maintaining",  color: "#1e40af", bg: "#dbeafe" },
+  RECOVERY:     { label: "Recovery",     color: "#92400e", bg: "#fef3c7" },
+  UNPRODUCTIVE: { label: "Unproductive", color: "#7f1d1d", bg: "#fee2e2" },
+  DETRAINING:   { label: "Detraining",   color: "#6b7280", bg: "#f3f4f6" },
+  OVERREACHING: { label: "Overreaching", color: "#7c2d12", bg: "#ffedd5" },
+  PEAKING:      { label: "Peaking",      color: "#5b21b6", bg: "#ede9fe" },
+};
+
+function TrainingStatusBadge({ status }: { status: string }) {
+  const cfg = TRAINING_STATUS_CONFIG[status.toUpperCase()] ?? { label: status, color: "#374151", bg: "#f3f4f6" };
+  return (
+    <span style={{ padding: "4px 12px", borderRadius: 999, background: cfg.bg, color: cfg.color, fontWeight: 600, fontSize: 13 }}>
+      {cfg.label}
+    </span>
   );
 }
 

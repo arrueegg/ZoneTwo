@@ -56,7 +56,27 @@ export function Wellness() {
               bodyBatteryWake={summary.body_battery_wake ?? null}
               stress={summary.stress_avg ?? null}
             />
-            {/* Readiness scores */}
+            {/* Training status + endurance score */}
+          {(summary.training_status || summary.endurance_score != null) && (
+            <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", gap: "8px 20px", alignItems: "center" }}>
+              {summary.training_status && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 12, color: "#6b7280" }}>Training Status</span>
+                  <TrainingStatusBadge status={summary.training_status} />
+                </div>
+              )}
+              {summary.endurance_score != null && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 12, color: "#6b7280" }}>Endurance Score</span>
+                  <span style={{ fontWeight: 700, color: "#10b981", fontSize: 16 }}>
+                    {summary.endurance_score.toFixed(1)}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Readiness scores */}
           <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", gap: "8px 24px", alignItems: "center" }}>
             {summary.readiness_score != null && (
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -144,6 +164,25 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 14, color: "#111" }}>{title}</h2>
       {children}
     </div>
+  );
+}
+
+const TRAINING_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  PRODUCTIVE:   { label: "Productive",   color: "#065f46", bg: "#d1fae5" },
+  MAINTAINING:  { label: "Maintaining",  color: "#1e40af", bg: "#dbeafe" },
+  RECOVERY:     { label: "Recovery",     color: "#92400e", bg: "#fef3c7" },
+  UNPRODUCTIVE: { label: "Unproductive", color: "#7f1d1d", bg: "#fee2e2" },
+  DETRAINING:   { label: "Detraining",   color: "#6b7280", bg: "#f3f4f6" },
+  OVERREACHING: { label: "Overreaching", color: "#7c2d12", bg: "#ffedd5" },
+  PEAKING:      { label: "Peaking",      color: "#5b21b6", bg: "#ede9fe" },
+};
+
+function TrainingStatusBadge({ status }: { status: string }) {
+  const cfg = TRAINING_STATUS_CONFIG[status.toUpperCase()] ?? { label: status, color: "#374151", bg: "#f3f4f6" };
+  return (
+    <span style={{ padding: "3px 10px", borderRadius: 999, background: cfg.bg, color: cfg.color, fontWeight: 600, fontSize: 13 }}>
+      {cfg.label}
+    </span>
   );
 }
 

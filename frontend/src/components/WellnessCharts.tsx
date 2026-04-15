@@ -1,5 +1,5 @@
 import {
-  LineChart, Line, BarChart, Bar, AreaChart, Area,
+  LineChart, Line, BarChart, Bar, ComposedChart, AreaChart, Area,
   XAxis, YAxis, Tooltip, Legend, ReferenceLine,
   ResponsiveContainer, CartesianGrid,
 } from "recharts";
@@ -56,16 +56,27 @@ export function WellnessCharts({ data }: Props) {
         </ResponsiveContainer>
       </ChartCard>
 
-      <ChartCard title="Sleep">
+      <ChartCard title="Sleep duration & score">
         <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={data} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+          <ComposedChart data={data} margin={{ top: 4, right: 40, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
             <XAxis dataKey="date" tick={tick} tickFormatter={fmt} />
-            <YAxis tick={tick} unit="h" domain={[0, 12]} />
-            <Tooltip formatter={(v: number) => [`${v.toFixed(1)} h`]} labelFormatter={fmt} />
-            <ReferenceLine y={8} stroke="#9ca3af" strokeDasharray="3 3" label={{ value: "8h", fontSize: 10, fill: "#9ca3af" }} />
-            <Bar dataKey="sleep_hours" fill="#3b82f6" name="Sleep" radius={[2, 2, 0, 0]} />
-          </BarChart>
+            <YAxis yAxisId="h" tick={tick} unit="h" domain={[0, 12]} />
+            <YAxis yAxisId="score" orientation="right" tick={tick} domain={[0, 100]}
+              label={{ value: "score", angle: 90, position: "insideRight", fontSize: 10, fill: "#9ca3af" }} />
+            <Tooltip
+              formatter={(v: number, name: string) =>
+                name === "Score" ? [`${v.toFixed(0)}`, name] : [`${v.toFixed(1)} h`, name]
+              }
+              labelFormatter={fmt}
+            />
+            <Legend wrapperStyle={{ fontSize: 11 }} />
+            <ReferenceLine yAxisId="h" y={8} stroke="#9ca3af" strokeDasharray="3 3"
+              label={{ value: "8h", fontSize: 10, fill: "#9ca3af" }} />
+            <Bar yAxisId="h" dataKey="sleep_hours" fill="#3b82f6" name="Hours" radius={[2, 2, 0, 0]} />
+            <Line yAxisId="score" type="monotone" dataKey="sleep_score" stroke="#f59e0b"
+              name="Score" dot={false} strokeWidth={2} connectNulls />
+          </ComposedChart>
         </ResponsiveContainer>
       </ChartCard>
 
@@ -108,6 +119,27 @@ export function WellnessCharts({ data }: Props) {
           </AreaChart>
         </ResponsiveContainer>
       </ChartCard>
+
+      {data.some((d) => d.endurance_score != null) && (
+        <ChartCard title="Endurance score">
+          <ResponsiveContainer width="100%" height={200}>
+            <AreaChart data={data} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="enduranceGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor="#10b981" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="date" tick={tick} tickFormatter={fmt} />
+              <YAxis tick={tick} domain={["auto", "auto"]} />
+              <Tooltip formatter={(v: number) => [`${v.toFixed(1)}`]} labelFormatter={fmt} />
+              <Area type="monotone" dataKey="endurance_score" stroke="#10b981" fill="url(#enduranceGrad)"
+                name="Endurance score" strokeWidth={2} dot={false} connectNulls />
+            </AreaChart>
+          </ResponsiveContainer>
+        </ChartCard>
+      )}
 
       <ChartCard title="SpO₂ & Respiration">
         <ResponsiveContainer width="100%" height={200}>
