@@ -52,7 +52,7 @@ export function Preparation() {
   const [discussion, setDiscussion] = useState<Array<{ role: "user" | "plan"; text: string }>>([]);
   const [question, setQuestion] = useState("");
 
-  const { data: events = [], isLoading } = useQuery<TrainingEvent[]>({
+  const { data: events = [] } = useQuery<TrainingEvent[]>({
     queryKey: ["preparation-events", athleteId],
     queryFn: async () => {
       const { data } = await api.get("/preparation/events", { params: { athlete_id: athleteId } });
@@ -99,12 +99,12 @@ export function Preparation() {
   });
 
   const { data: plannedWorkouts = [] } = useQuery<PlannedWorkout[]>({
-    queryKey: ["planned-workouts", selectedEventId],
+    queryKey: ["planned-workouts", athleteId],
     queryFn: async () => {
-      const { data } = await api.get(`/preparation/events/${selectedEventId}/workouts`);
+      const { data } = await api.get("/preparation/workouts", { params: { athlete_id: athleteId } });
       return data;
     },
-    enabled: Boolean(selectedEventId),
+    enabled: Boolean(athleteId),
   });
 
   const discussPlan = useMutation({
@@ -129,7 +129,7 @@ export function Preparation() {
       return data as PlannedWorkout[];
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["planned-workouts", selectedEventId] });
+      queryClient.invalidateQueries({ queryKey: ["planned-workouts", athleteId] });
     },
   });
 
@@ -142,7 +142,7 @@ export function Preparation() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["planned-workouts"] });
-      queryClient.invalidateQueries({ queryKey: ["planned-workouts", selectedEventId] });
+      queryClient.invalidateQueries({ queryKey: ["planned-workouts", athleteId] });
     },
   });
 
@@ -152,7 +152,7 @@ export function Preparation() {
       return data as PlannedWorkout;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["planned-workouts", selectedEventId] });
+      queryClient.invalidateQueries({ queryKey: ["planned-workouts", athleteId] });
     },
   });
 
@@ -225,164 +225,194 @@ export function Preparation() {
       />
       <ModeSwitch mode={workspaceMode} onModeChange={setWorkspaceMode} hasMultipleEvents={events.length > 1} />
 
-      <div style={APP_LAYOUT}>
-        <aside style={SIDEBAR}>
-          <section style={PANEL}>
-            <h2 style={SECTION_TITLE}>Targets</h2>
-            {isLoading && <p style={MUTED}>Loading events...</p>}
-            {!isLoading && calendarItems.length === 0 && <p style={MUTED}>No upcoming events yet.</p>}
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {calendarItems.map((event) => (
-                <button
-                  key={event.id}
-                  onClick={() => {
-                    setSelectedEventId(event.id);
-                    setWorkspaceMode("event-plan");
-                  }}
-                  style={{
-                    ...EVENT_ROW,
-                    borderColor: event.id === selectedEventId ? "#3B8BD4" : "#e5e7eb",
-                    background: event.id === selectedEventId ? "#f0f7ff" : "#fff",
-                  }}
-                >
-                  <span>
-                    <strong>{event.name}</strong>
-                    <span style={{ display: "block", color: "#6b7280", fontSize: 12 }}>
-                      {formatDate(event.event_date)} · {event.daysLeft} days · {event.priority} target
-                    </span>
-                  </span>
-                  <span style={BADGE}>{event.target_distance_km ? `${event.target_distance_km} km` : event.event_type}</span>
-                </button>
-              ))}
-            </div>
-          </section>
+      {workspaceMode === "event-plan" && (
+        <EventPlanWorkspace
+          events={calendarItems}
+          selectedEvent={selectedEvent}
+          selectedEventId={selectedEventId}
+          onSelectEvent={setSelectedEventId}
+          form={form}
+          onFormChange={setForm}
+          onCreateEvent={() => createEvent.mutate()}
+          creatingEvent={createEvent.isPending}
+          plan={plan ?? null}
+          planLoading={planLoading}
+          options={planOptions}
+          onOptionsChange={setPlanOptions}
+          plannedWorkouts={plannedWorkouts}
+          onSavePlan={(replace) => savePlan.mutate(replace)}
+          savingPlan={savePlan.isPending}
+          onDelete={() => selectedEvent && deleteEvent.mutate(selectedEvent.id)}
+          deleting={deleteEvent.isPending}
+        />
+      )}
 
-          <details style={PANEL}>
-            <summary style={SUMMARY}>Add Target</summary>
-            <form onSubmit={(e) => { e.preventDefault(); createEvent.mutate(); }} style={{ ...FORM, marginTop: 14 }}>
-              <Field label="Name" value={form.name} onChange={(name) => setForm((f) => ({ ...f, name }))} placeholder="City 10K" required />
-              <div style={TWO_COL}>
-                <Field label="Date" value={form.event_date} onChange={(event_date) => setForm((f) => ({ ...f, event_date }))} type="date" required />
-                <Select label="Priority" value={form.priority} onChange={(priority) => setForm((f) => ({ ...f, priority: priority as EventForm["priority"] }))} options={["A", "B", "C"]} />
-              </div>
-              <div style={TWO_COL}>
-                <Field label="Distance km" value={form.target_distance_km} onChange={(target_distance_km) => setForm((f) => ({ ...f, target_distance_km }))} type="number" placeholder="10" />
-                <Field label="Target time" value={form.target_time} onChange={(target_time) => setForm((f) => ({ ...f, target_time }))} placeholder="45:00" />
-              </div>
-              <Select label="Type" value={form.event_type} onChange={(event_type) => setForm((f) => ({ ...f, event_type }))} options={["race", "time trial", "long run", "trail"]} />
-              <Field label="Notes" value={form.notes} onChange={(notes) => setForm((f) => ({ ...f, notes }))} placeholder="Rolling course, tune-up race" />
-              <button type="submit" disabled={!form.name || !form.event_date || createEvent.isPending} style={PRIMARY_BTN}>
-                {createEvent.isPending ? "Adding..." : "Add Event"}
-              </button>
-            </form>
-          </details>
-        </aside>
+      {workspaceMode === "season-plan" && (
+        <SeasonPlanWorkspace
+          seasonPlan={seasonPlan ?? null}
+          options={planOptions}
+          onOptionsChange={setPlanOptions}
+          onSaveSeasonPlan={(replace) => saveSeasonPlan.mutate(replace)}
+          savingSeasonPlan={saveSeasonPlan.isPending}
+        />
+      )}
 
-        <section style={MAIN_STACK}>
-          {!selectedEvent && <EmptyPlan />}
-          {workspaceMode === "season-plan" && (
-            <SeasonPlanWorkspace
-              seasonPlan={seasonPlan ?? null}
-              options={planOptions}
-              onOptionsChange={setPlanOptions}
-              onSaveSeasonPlan={(replace) => saveSeasonPlan.mutate(replace)}
-              savingSeasonPlan={saveSeasonPlan.isPending}
-            />
-          )}
-          {workspaceMode !== "season-plan" && selectedEvent && planLoading && <p style={MUTED}>Building plan...</p>}
-          {workspaceMode !== "season-plan" && selectedEvent && plan && (
-            <EventWorkspace
-              event={selectedEvent}
-              plan={plan}
-              mode={workspaceMode}
-              options={planOptions}
-              onOptionsChange={setPlanOptions}
-              discussion={discussion}
-              question={question}
-              onQuestionChange={setQuestion}
-              onAsk={() => {
-                if (!question.trim()) return;
-                discussPlan.mutate(question.trim());
-                setQuestion("");
-              }}
-              discussing={discussPlan.isPending}
-              plannedWorkouts={plannedWorkouts}
-              onSavePlan={(replace) => savePlan.mutate(replace)}
-              savingPlan={savePlan.isPending}
-              onUpdateWorkout={(id, patch) => updateWorkout.mutate({ id, patch })}
-              updatingWorkout={updateWorkout.isPending}
-              onDelete={() => deleteEvent.mutate(selectedEvent.id)}
-              deleting={deleteEvent.isPending}
-            />
-          )}
-        </section>
-      </div>
+      {workspaceMode === "calendar" && (
+        <CalendarWorkspace
+          workouts={plannedWorkouts}
+          onUpdateWorkout={(id, patch) => updateWorkout.mutate({ id, patch })}
+          updating={updateWorkout.isPending}
+        />
+      )}
+
+      {workspaceMode === "coach" && (
+        <CoachWorkspace
+          events={calendarItems}
+          selectedEvent={selectedEvent}
+          selectedEventId={selectedEventId}
+          onSelectEvent={setSelectedEventId}
+          plan={plan ?? null}
+          planLoading={planLoading}
+          discussion={discussion}
+          question={question}
+          onQuestionChange={setQuestion}
+          onAsk={() => {
+            if (!question.trim() || !selectedEvent) return;
+            discussPlan.mutate(question.trim());
+            setQuestion("");
+          }}
+          discussing={discussPlan.isPending}
+        />
+      )}
     </main>
   );
 }
 
-function EventWorkspace({
-  event, plan, mode, options, onOptionsChange, discussion, question, onQuestionChange, onAsk, discussing,
-  plannedWorkouts, onSavePlan, savingPlan, onUpdateWorkout, updatingWorkout, onDelete, deleting,
+function EventPlanWorkspace({
+  events, selectedEvent, selectedEventId, onSelectEvent, form, onFormChange, onCreateEvent, creatingEvent,
+  plan, planLoading, options, onOptionsChange, plannedWorkouts, onSavePlan, savingPlan, onDelete, deleting,
 }: {
-  event: TrainingEvent;
-  plan: PreparationPlan;
-  mode: WorkspaceMode;
+  events: Array<TrainingEvent & { daysLeft: number }>;
+  selectedEvent: TrainingEvent | null;
+  selectedEventId: string | null;
+  onSelectEvent: (id: string) => void;
+  form: EventForm;
+  onFormChange: (form: EventForm) => void;
+  onCreateEvent: () => void;
+  creatingEvent: boolean;
+  plan: PreparationPlan | null;
+  planLoading: boolean;
   options: PlanOptions;
   onOptionsChange: (options: PlanOptions) => void;
-  discussion: Array<{ role: "user" | "plan"; text: string }>;
-  question: string;
-  onQuestionChange: (value: string) => void;
-  onAsk: () => void;
-  discussing: boolean;
   plannedWorkouts: PlannedWorkout[];
   onSavePlan: (replace: boolean) => void;
   savingPlan: boolean;
-  onUpdateWorkout: (id: string, patch: Partial<PlannedWorkout>) => void;
-  updatingWorkout: boolean;
   onDelete: () => void;
   deleting: boolean;
 }) {
+  const eventWorkouts = selectedEvent ? plannedWorkouts.filter((workout) => workout.event_id === selectedEvent.id) : [];
+  const hasMultipleEvents = events.length > 1;
+
   return (
-    <div>
-      <div style={{ ...HEADER_BAND, marginBottom: 12 }}>
+    <section style={PANEL}>
+      <div style={SECTION_HEADER}>
         <div>
-          <h2 style={{ margin: "0 0 6px", fontSize: 22 }}>{event.name}</h2>
-          <p style={{ ...MUTED, margin: 0 }}>{plan.summary.headline} {plan.summary.target}</p>
+          <h2 style={SECTION_TITLE}>Event Plan</h2>
+          <p style={{ ...MUTED, margin: 0 }}>Manage targets and preview the selected target on its own.</p>
         </div>
-        <button onClick={onDelete} disabled={deleting} style={GHOST_BTN}>{deleting ? "Deleting..." : "Delete"}</button>
       </div>
 
-      <div style={METRIC_GRID}>
-        <Metric label="Weekly run volume" value={`${plan.context.recent_weekly_km.toFixed(1)} km`} />
-        <Metric label="Long run" value={`${plan.context.recent_long_run_km.toFixed(1)} km`} />
-        <Metric label="Readiness" value={plan.context.readiness_score != null ? plan.context.readiness_score.toFixed(0) : "-"} />
-        <Metric label="CTL / TSB" value={`${fmtNum(plan.context.ctl)} / ${fmtNum(plan.context.tsb)}`} />
-      </div>
-
-      {plan.summary.risk_flags.length > 0 && (
-        <div style={WARNINGS}>
-          {plan.summary.risk_flags.map((flag) => <p key={flag} style={{ margin: 0 }}>{flag}</p>)}
+      <div style={TARGET_LAYOUT}>
+        <div>
+          <h3 style={SMALL_HEADING}>Targets</h3>
+          {events.length === 0 && <p style={MUTED}>No upcoming events yet.</p>}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {events.map((event) => (
+              <button
+                key={event.id}
+                onClick={() => onSelectEvent(event.id)}
+                style={{
+                  ...EVENT_ROW,
+                  borderColor: event.id === selectedEventId ? "#3B8BD4" : "#e5e7eb",
+                  background: event.id === selectedEventId ? "#f0f7ff" : "#fff",
+                }}
+              >
+                <span>
+                  <strong>{event.name}</strong>
+                  <span style={{ display: "block", color: "#6b7280", fontSize: 12 }}>
+                    {formatDate(event.event_date)} · {event.daysLeft} days · {event.priority} target
+                  </span>
+                </span>
+                <span style={BADGE}>{event.target_distance_km ? `${event.target_distance_km} km` : event.event_type}</span>
+              </button>
+            ))}
+          </div>
         </div>
-      )}
 
-      {mode === "event-plan" && (
-        <div style={PANEL}>
-          <div style={SECTION_HEADER}>
-            <div>
-              <h2 style={SECTION_TITLE}>Event Plan</h2>
-              <p style={{ ...MUTED, margin: 0 }}>A focused plan for this target only.</p>
+        <details style={ADD_TARGET_PANEL}>
+          <summary style={SUMMARY}>Add Target</summary>
+          <form onSubmit={(event) => { event.preventDefault(); onCreateEvent(); }} style={{ ...FORM, marginTop: 14 }}>
+            <Field label="Name" value={form.name} onChange={(name) => onFormChange({ ...form, name })} placeholder="City 10K" required />
+            <div style={TWO_COL}>
+              <Field label="Date" value={form.event_date} onChange={(event_date) => onFormChange({ ...form, event_date })} type="date" required />
+              <Select label="Priority" value={form.priority} onChange={(priority) => onFormChange({ ...form, priority: priority as EventForm["priority"] })} options={["A", "B", "C"]} />
             </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div style={TWO_COL}>
+              <Field label="Distance km" value={form.target_distance_km} onChange={(target_distance_km) => onFormChange({ ...form, target_distance_km })} type="number" placeholder="10" />
+              <Field label="Target time" value={form.target_time} onChange={(target_time) => onFormChange({ ...form, target_time })} placeholder="45:00" />
+            </div>
+            <Select label="Type" value={form.event_type} onChange={(event_type) => onFormChange({ ...form, event_type })} options={["race", "time trial", "long run", "trail"]} />
+            <Field label="Notes" value={form.notes} onChange={(notes) => onFormChange({ ...form, notes })} placeholder="Rolling course, tune-up race" />
+            <button type="submit" disabled={!form.name || !form.event_date || creatingEvent} style={PRIMARY_BTN}>
+              {creatingEvent ? "Adding..." : "Add Event"}
+            </button>
+          </form>
+        </details>
+      </div>
+
+      {!selectedEvent && <EmptyPlan />}
+      {selectedEvent && planLoading && <p style={MUTED}>Building plan...</p>}
+      {selectedEvent && plan && (
+        <>
+          <div style={{ ...HEADER_BAND, marginTop: 16, marginBottom: 12 }}>
+            <div>
+              <h2 style={{ margin: "0 0 6px", fontSize: 22 }}>{selectedEvent.name}</h2>
+              <p style={{ ...MUTED, margin: 0 }}>{plan.summary.headline} {plan.summary.target}</p>
+            </div>
+            <button onClick={onDelete} disabled={deleting} style={GHOST_BTN}>{deleting ? "Deleting..." : "Delete"}</button>
+          </div>
+
+          <div style={METRIC_GRID}>
+            <Metric label="Weekly run volume" value={`${plan.context.recent_weekly_km.toFixed(1)} km`} />
+            <Metric label="Long run" value={`${plan.context.recent_long_run_km.toFixed(1)} km`} />
+            <Metric label="Readiness" value={plan.context.readiness_score != null ? plan.context.readiness_score.toFixed(0) : "-"} />
+            <Metric label="CTL / TSB" value={`${fmtNum(plan.context.ctl)} / ${fmtNum(plan.context.tsb)}`} />
+          </div>
+
+          {plan.summary.risk_flags.length > 0 && (
+            <div style={WARNINGS}>
+              {plan.summary.risk_flags.map((flag) => <p key={flag} style={{ margin: 0 }}>{flag}</p>)}
+            </div>
+          )}
+
+          {hasMultipleEvents && (
+            <div style={WARNINGS}>
+              <strong>Preview only</strong>
+              <p style={{ margin: 0 }}>Multiple targets exist, so the actual calendar should be saved from Season Plan to keep one preparation plan per week.</p>
+            </div>
+          )}
+
+          <PlanSettings options={options} onOptionsChange={onOptionsChange} />
+          {!hasMultipleEvents && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
               <button onClick={() => onSavePlan(false)} disabled={savingPlan} style={PRIMARY_BTN}>
-                {plannedWorkouts.length ? "Keep Saved Calendar" : "Save Plan"}
+                {eventWorkouts.length ? "Keep Saved Calendar" : "Save Plan"}
               </button>
               <button onClick={() => onSavePlan(true)} disabled={savingPlan} style={GHOST_BTN}>
                 {savingPlan ? "Saving..." : "Replace"}
               </button>
             </div>
-          </div>
-          <PlanSettings options={options} onOptionsChange={onOptionsChange} />
+          )}
           <div style={{ display: "grid", gap: 10 }}>
             {plan.weeks.map((week) => (
               <article key={week.week} style={WEEK_ROW}>
@@ -409,55 +439,102 @@ function EventWorkspace({
               </article>
             ))}
           </div>
-        </div>
+        </>
       )}
+    </section>
+  );
+}
 
-      {mode === "calendar" && (
-        <div style={PANEL}>
-          <div style={SECTION_HEADER}>
-            <div>
-              <h2 style={SECTION_TITLE}>Workout Calendar</h2>
-              <p style={{ ...MUTED, margin: 0 }}>Edit dates, status, titles, and distances after saving a plan.</p>
-            </div>
-          </div>
-          <PlannedWorkoutCalendar
-            workouts={plannedWorkouts}
-            onUpdateWorkout={onUpdateWorkout}
-            updating={updatingWorkout}
-          />
+function CalendarWorkspace({
+  workouts, onUpdateWorkout, updating,
+}: {
+  workouts: PlannedWorkout[];
+  onUpdateWorkout: (id: string, patch: Partial<PlannedWorkout>) => void;
+  updating: boolean;
+}) {
+  return (
+    <section style={PANEL}>
+      <div style={SECTION_HEADER}>
+        <div>
+          <h2 style={SECTION_TITLE}>Calendar</h2>
+          <p style={{ ...MUTED, margin: 0 }}>Saved workouts across the whole season. This is what you have committed to.</p>
         </div>
-      )}
+      </div>
+      <PlannedWorkoutCalendar
+        workouts={workouts}
+        onUpdateWorkout={onUpdateWorkout}
+        updating={updating}
+      />
+    </section>
+  );
+}
 
-      {mode === "coach" && (
-        <div style={PANEL}>
+function CoachWorkspace({
+  events, selectedEvent, selectedEventId, onSelectEvent, plan, planLoading, discussion, question, onQuestionChange, onAsk, discussing,
+}: {
+  events: Array<TrainingEvent & { daysLeft: number }>;
+  selectedEvent: TrainingEvent | null;
+  selectedEventId: string | null;
+  onSelectEvent: (id: string) => void;
+  plan: PreparationPlan | null;
+  planLoading: boolean;
+  discussion: Array<{ role: "user" | "plan"; text: string }>;
+  question: string;
+  onQuestionChange: (value: string) => void;
+  onAsk: () => void;
+  discussing: boolean;
+}) {
+  return (
+    <section style={PANEL}>
+      <div style={SECTION_HEADER}>
+        <div>
           <h2 style={SECTION_TITLE}>Coach</h2>
-          <div style={DISCUSS_BOX}>
-            {discussion.length === 0 && (
-              <p style={{ ...MUTED, margin: 0 }}>Ask why a week is structured this way, tell the plan you are tired, or ask how to fit training into fewer days.</p>
-            )}
-            {discussion.map((item, index) => (
-              <div key={index} style={item.role === "user" ? USER_MSG : PLAN_MSG}>
-                {item.text}
-              </div>
-            ))}
-            <div style={{ display: "flex", gap: 8 }}>
-              <input
-                value={question}
-                onChange={(event) => onQuestionChange(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") onAsk();
-                }}
-                placeholder="Why is the long run this distance?"
-                style={{ ...INPUT, flex: 1 }}
-              />
-              <button onClick={onAsk} disabled={discussing || !question.trim()} style={PRIMARY_BTN}>
-                {discussing ? "Thinking..." : "Ask"}
-              </button>
-            </div>
-          </div>
+          <p style={{ ...MUTED, margin: 0 }}>Discuss the selected target and adjust the plan reasoning.</p>
+        </div>
+      </div>
+      {events.length > 0 && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+          {events.map((event) => (
+            <button
+              key={event.id}
+              onClick={() => onSelectEvent(event.id)}
+              style={event.id === selectedEventId ? ACTIVE_CHIP : CHIP}
+            >
+              {event.name}
+            </button>
+          ))}
         </div>
       )}
-    </div>
+      {selectedEvent && (
+        <p style={{ ...MUTED, marginTop: 0 }}>
+          Talking about <strong>{selectedEvent.name}</strong>{planLoading ? " while the plan loads..." : plan ? `, ${plan.context.days_to_event} days away.` : "."}
+        </p>
+      )}
+      <div style={DISCUSS_BOX}>
+        {discussion.length === 0 && (
+          <p style={{ ...MUTED, margin: 0 }}>Ask why a week is structured this way, tell the plan you are tired, or ask how to fit training into fewer days.</p>
+        )}
+        {discussion.map((item, index) => (
+          <div key={index} style={item.role === "user" ? USER_MSG : PLAN_MSG}>
+            {item.text}
+          </div>
+        ))}
+        <div style={{ display: "flex", gap: 8 }}>
+          <input
+            value={question}
+            onChange={(event) => onQuestionChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") onAsk();
+            }}
+            placeholder="I feel tired this week. What should change?"
+            style={{ ...INPUT, flex: 1 }}
+          />
+          <button onClick={onAsk} disabled={discussing || !question.trim() || !selectedEvent} style={PRIMARY_BTN}>
+            {discussing ? "Thinking..." : "Ask"}
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -804,10 +881,9 @@ const PAGE: React.CSSProperties = {
 const TITLE: React.CSSProperties = { margin: "0 0 6px", fontSize: 28 };
 const SECTION_TITLE: React.CSSProperties = { fontSize: 15, fontWeight: 700, margin: "0 0 12px" };
 const MUTED: React.CSSProperties = { color: "#6b7280", fontSize: 14 };
-const APP_LAYOUT: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))", gap: 18, alignItems: "start" };
-const SIDEBAR: React.CSSProperties = { display: "grid", gap: 12, alignSelf: "start" };
-const MAIN_STACK: React.CSSProperties = { display: "grid", gap: 14, minWidth: 0 };
 const PANEL: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: 14, background: "#fff" };
+const TARGET_LAYOUT: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))", gap: 14, alignItems: "start" };
+const ADD_TARGET_PANEL: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: 14, background: "#f9fafb" };
 const COMMAND_BAR: React.CSSProperties = { border: "1px solid #dbeafe", borderRadius: 8, padding: 14, marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, flexWrap: "wrap", background: "#f8fbff" };
 const COMMAND_META: React.CSSProperties = { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" };
 const PLAN_SETTINGS: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: 14, marginBottom: 14, display: "grid", gap: 12, background: "#fff" };
@@ -816,6 +892,7 @@ const MODE_BTN: React.CSSProperties = { background: "#fff", color: "#374151", bo
 const ACTIVE_MODE_BTN: React.CSSProperties = { ...MODE_BTN, background: "#e8f3ff", color: "#1f5f99", borderColor: "#3B8BD4" };
 const SECTION_HEADER: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: 14, alignItems: "flex-start", marginBottom: 12, flexWrap: "wrap" };
 const TWO_COL: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 10 };
+const SMALL_HEADING: React.CSSProperties = { fontSize: 13, fontWeight: 700, color: "#374151", margin: "0 0 10px" };
 const SUMMARY: React.CSSProperties = { cursor: "pointer", fontSize: 15, fontWeight: 700, color: "#111827" };
 const FORM: React.CSSProperties = { display: "flex", flexDirection: "column", gap: 12 };
 const LABEL: React.CSSProperties = { display: "flex", flexDirection: "column", gap: 5, color: "#374151", fontSize: 13, fontWeight: 600 };
@@ -826,6 +903,8 @@ const EVENT_ROW: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadi
 const BADGE: React.CSSProperties = { border: "1px solid #d1d5db", borderRadius: 6, padding: "3px 7px", color: "#374151", fontSize: 12, background: "#fff", whiteSpace: "nowrap" };
 const GOOD_BADGE: React.CSSProperties = { border: "1px solid #86efac", borderRadius: 6, padding: "4px 8px", color: "#166534", fontSize: 12, background: "#f0fdf4", fontWeight: 700, whiteSpace: "nowrap" };
 const DANGER_BADGE: React.CSSProperties = { border: "1px solid #fca5a5", borderRadius: 6, padding: "4px 8px", color: "#991b1b", fontSize: 12, background: "#fef2f2", fontWeight: 700, whiteSpace: "nowrap" };
+const CHIP: React.CSSProperties = { background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 6, padding: "7px 10px", cursor: "pointer", fontSize: 13 };
+const ACTIVE_CHIP: React.CSSProperties = { ...CHIP, background: "#e8f3ff", color: "#1f5f99", borderColor: "#3B8BD4", fontWeight: 700 };
 const COUNTDOWN: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 14px", display: "flex", flexDirection: "column", gap: 3, minWidth: 110 };
 const HEADER_BAND: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: 18, display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 16 };
 const METRIC_GRID: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 };

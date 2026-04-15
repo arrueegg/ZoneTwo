@@ -300,6 +300,24 @@ async def list_planned_workouts(event_id: str, db: AsyncSession = Depends(get_db
     return [_serialize_workout(workout) for workout in result.scalars().all()]
 
 
+@router.get("/workouts")
+async def list_athlete_planned_workouts(
+    athlete_id: str = Query(...),
+    include_past: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict[str, Any]]:
+    filters = [PlannedWorkout.athlete_id == athlete_id]
+    if not include_past:
+        filters.append(PlannedWorkout.planned_date >= date.today())
+
+    result = await db.execute(
+        select(PlannedWorkout)
+        .where(and_(*filters))
+        .order_by(PlannedWorkout.planned_date, PlannedWorkout.sort_order)
+    )
+    return [_serialize_workout(workout) for workout in result.scalars().all()]
+
+
 @router.post("/events/{event_id}/workouts/generate")
 async def save_generated_workouts(
     event_id: str,
