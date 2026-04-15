@@ -63,7 +63,7 @@ backend/    FastAPI + async SQLAlchemy + aiosqlite (SQLite for local dev)
 2. **Training load** (CTL/ATL/TSB) is computed from activity TSS values
 3. **Readiness score** (0–100) is a weighted composite of HRV, resting HR, sleep, body battery, and stress
 4. **Analytics** (anomaly detection, correlations, weekly summaries) run on request
-5. **AI debrief** calls Claude with the week's metrics — cached for 7 days
+5. **AI debrief** calls Groq (Llama 3) with the week's metrics — cached for 7 days
 
 ### TSS calculation
 

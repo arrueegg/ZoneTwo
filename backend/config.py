@@ -18,6 +18,7 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = "sqlite+aiosqlite:///./training_app.db"
+    redis_url: str = "redis://localhost:6379/0"
 
     # Groq (free tier — https://console.groq.com)
     groq_api_key: str = ""
