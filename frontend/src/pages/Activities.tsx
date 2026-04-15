@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useActivities } from "../hooks/useActivities";
 import { useAthleteContext } from "../main";
 import type { Activity } from "../api/client";
+import { HelpTerm, labelTitle } from "../components/Help";
 import { SkeletonTableRows } from "../components/Skeleton";
 
 // ── formatting helpers ────────────────────────────────────────────────────────
@@ -80,7 +81,7 @@ function HrZoneBar({ zones }: { zones: Record<string, number> | null }) {
         return pct > 0 ? (
           <div
             key={k}
-            title={`${ZONE_LABELS[i]}: ${Math.round(pct)}%`}
+            title={`${ZONE_LABELS[i]}: ${Math.round(pct)}%. ${labelTitle(`Z${i + 1}`) ?? ""}`}
             style={{ width: `${pct}%`, background: ZONE_COLORS[i] }}
           />
         ) : null;
@@ -105,7 +106,7 @@ function HrZoneBreakdown({ zones }: { zones: Record<string, number> | null }) {
           <div key={k} style={{ display: "flex", alignItems: "center", gap: 5 }}>
             <div style={{ width: 10, height: 10, borderRadius: 2, background: ZONE_COLORS[i], flexShrink: 0 }} />
             <span style={{ fontSize: 12, color: "#374151" }}>
-              <strong>{ZONE_LABELS[i]}</strong>: {min}m ({Math.round(pct)}%)
+              <strong><HelpTerm term={`Z${i + 1}`}>{ZONE_LABELS[i]}</HelpTerm></strong>: {min}m ({Math.round(pct)}%)
             </span>
           </div>
         );
@@ -192,7 +193,9 @@ function ActivityDetail({ activity: a }: { activity: Activity }) {
 function DetailStat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <span style={{ color: "#9ca3af", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>{label} </span>
+      <span style={{ color: "#9ca3af", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+        <HelpTerm>{label}</HelpTerm>{" "}
+      </span>
       <strong>{value}</strong>
     </div>
   );
@@ -227,7 +230,9 @@ function WeeklySummary({ activities }: { activities: Activity[] }) {
 function BarStat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div style={{ fontSize: 11, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
+      <div style={{ fontSize: 11, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+        <HelpTerm>{label}</HelpTerm>
+      </div>
       <div style={{ fontWeight: 700, color: "#111", marginTop: 2 }}>{value}</div>
     </div>
   );
@@ -388,13 +393,13 @@ export function Activities() {
         }}>
           <span>Date</span>
           <span>Type</span>
-          <span>Distance</span>
-          <span>Time</span>
-          <span>Avg HR</span>
-          <span>Pace</span>
-          <span>HR Zones</span>
-          <span>Elev.</span>
-          <span>TSS</span>
+          <span><HelpTerm>Distance</HelpTerm></span>
+          <span><HelpTerm>Time</HelpTerm></span>
+          <span><HelpTerm>Avg HR</HelpTerm></span>
+          <span><HelpTerm>Pace</HelpTerm></span>
+          <span><HelpTerm>HR Zones</HelpTerm></span>
+          <span><HelpTerm term="Elevation">Elev.</HelpTerm></span>
+          <span><HelpTerm>TSS</HelpTerm></span>
           <span />
           <span />
         </div>

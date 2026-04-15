@@ -6,6 +6,7 @@ import { ReadinessChart } from "../components/ReadinessChart";
 import { InsightsPanel } from "../components/InsightsPanel";
 import { AiWeeklySummary } from "../components/AiWeeklySummary";
 import { RacePredictions } from "../components/RacePredictions";
+import { HelpTerm } from "../components/Help";
 import { SkeletonRecovery, SkeletonChart } from "../components/Skeleton";
 import { useTrainingLoad, useMetricsSummary } from "../hooks/useMetrics";
 import { useWellness } from "../hooks/useWellness";
@@ -200,7 +201,7 @@ export function Dashboard() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 36 }}>
-      <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12, color: "#111" }}>{title}</h2>
+      <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12, color: "#111" }}><HelpTerm>{title}</HelpTerm></h2>
       {children}
     </div>
   );
@@ -209,7 +210,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Stat({ label, value }: { label: string; value: string | undefined }) {
   return (
     <div>
-      <span style={{ color: "#9ca3af" }}>{label}: </span>
+      <span style={{ color: "#9ca3af" }}><HelpTerm>{label}</HelpTerm>: </span>
       <strong>{value ?? "—"}</strong>
     </div>
   );
@@ -238,7 +239,7 @@ function TileCard({ label, children }: { label: string; children: React.ReactNod
   return (
     <div style={{ textAlign: "center" }}>
       <div style={{ fontSize: 11, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
-        {label}
+        <HelpTerm>{label}</HelpTerm>
       </div>
       {children}
     </div>

@@ -1,3 +1,5 @@
+import { HelpTerm } from "./Help";
+
 function fmtTime(secs: number): string {
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
@@ -60,7 +62,7 @@ export function RacePredictions({ predictions, vo2max, fitnessAge }: Props) {
           textAlign: "center",
         }}>
           <div style={{ fontSize: 11, color: "#3b82f6", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
-            VO₂max
+            <HelpTerm>VO₂max</HelpTerm>
           </div>
           <div style={{ fontSize: 22, fontWeight: 700, color: "#1d4ed8" }}>{vo2max}</div>
         </div>
@@ -72,7 +74,7 @@ export function RacePredictions({ predictions, vo2max, fitnessAge }: Props) {
           textAlign: "center",
         }}>
           <div style={{ fontSize: 11, color: "#16a34a", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
-            Fitness Age
+            <HelpTerm term="Fitness age">Fitness Age</HelpTerm>
           </div>
           <div style={{ fontSize: 22, fontWeight: 700, color: "#15803d" }}>{fitnessAge}</div>
         </div>

@@ -2,6 +2,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
   Legend, ResponsiveContainer, CartesianGrid,
 } from "recharts";
+import { HelpTerm } from "./Help";
 
 interface WellnessDay {
   date: string;
@@ -110,7 +111,7 @@ export function SleepStageBreakdown({ summary }: {
       {/* Score */}
       {summary.sleep_score != null && (
         <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 12, color: "#6b7280" }}>Sleep score</span>
+          <span style={{ fontSize: 12, color: "#6b7280" }}><HelpTerm>Sleep score</HelpTerm></span>
           <SleepScoreBadge score={summary.sleep_score} />
         </div>
       )}
@@ -131,7 +132,7 @@ export function SleepStageBreakdown({ summary }: {
           <div key={st.key} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12 }}>
             <div style={{ width: 9, height: 9, borderRadius: 2, background: st.color, flexShrink: 0 }} />
             <span style={{ color: "#374151" }}>
-              <strong>{st.label}</strong> {fmtMins(st.secs)}
+              <strong><HelpTerm>{st.label}</HelpTerm></strong> {fmtMins(st.secs)}
             </span>
           </div>
         ) : null)}

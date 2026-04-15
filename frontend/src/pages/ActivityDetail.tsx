@@ -7,6 +7,7 @@ import {
 } from "recharts";
 import api from "../api/client";
 import type { Activity, ActivityTrack, TrackPoint } from "../api/client";
+import { HelpTerm } from "../components/Help";
 
 // Leaflet CSS must be loaded globally — injected once here
 function injectLeafletCss() {
@@ -338,7 +339,7 @@ function SplitsTable({ splits }: { splits: ActivityTrack["splits"] }) {
           <tr style={{ borderBottom: "2px solid #e5e7eb" }}>
             {["Split", "Distance", "Time", "Pace", "Avg HR", "Elev. +", "Cadence"].map((h) => (
               <th key={h} style={{ padding: "6px 10px", textAlign: "left", color: "#6b7280", fontWeight: 600, fontSize: 11, whiteSpace: "nowrap" }}>
-                {h}
+                <HelpTerm>{h}</HelpTerm>
               </th>
             ))}
           </tr>
@@ -386,7 +387,9 @@ function StatRow({ activity: a }: { activity: Activity }) {
 function Tile({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
   return (
     <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 16px", minWidth: 90, textAlign: "center" }}>
-      <div style={{ fontSize: 10, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 10, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
+        <HelpTerm>{label}</HelpTerm>
+      </div>
       <div style={{ fontSize: 18, fontWeight: bold ? 700 : 600, color: "#111" }}>{value}</div>
     </div>
   );
@@ -405,7 +408,9 @@ function TrainingEffectTile({ aerobic, anaerobic, label }: { aerobic?: number | 
   const { bg, color } = colors[Math.min(5, Math.max(1, tier))];
   return (
     <div style={{ background: bg, border: "1px solid transparent", borderRadius: 8, padding: "10px 16px", minWidth: 110, textAlign: "center" }}>
-      <div style={{ fontSize: 10, color, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2, fontWeight: 600 }}>Training Effect</div>
+      <div style={{ fontSize: 10, color, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2, fontWeight: 600 }}>
+        <HelpTerm>Training Effect</HelpTerm>
+      </div>
       {aerobic != null && <div style={{ fontSize: 13, color }}><strong>Aerobic</strong> {aerobic.toFixed(1)}</div>}
       {anaerobic != null && <div style={{ fontSize: 13, color }}><strong>Anaerobic</strong> {anaerobic.toFixed(1)}</div>}
       {label && <div style={{ fontSize: 11, color, marginTop: 2, opacity: 0.8 }}>{label.replace(/_/g, " ")}</div>}
@@ -418,7 +423,7 @@ function TrainingEffectTile({ aerobic, anaerobic, label }: { aerobic?: number | 
 function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h3 style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>{title}</h3>
+      <h3 style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}><HelpTerm>{title}</HelpTerm></h3>
       {children}
     </div>
   );
@@ -427,7 +432,7 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 32 }}>
-      <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12, color: "#111" }}>{title}</h2>
+      <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12, color: "#111" }}><HelpTerm>{title}</HelpTerm></h2>
       {children}
     </div>
   );

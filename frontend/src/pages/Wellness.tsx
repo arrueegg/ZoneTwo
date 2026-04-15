@@ -9,6 +9,7 @@ import { WeeklySummaryTable } from "../components/WeeklySummaryTable";
 import { InsightsPanel } from "../components/InsightsPanel";
 import { ZoneDistributionChart } from "../components/ZoneDistributionChart";
 import { SleepChart, SleepStageBreakdown } from "../components/SleepChart";
+import { HelpTerm } from "../components/Help";
 import { SkeletonRecovery, SkeletonChart } from "../components/Skeleton";
 
 const today = new Date().toISOString().slice(0, 10);
@@ -61,13 +62,13 @@ export function Wellness() {
             <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", gap: "8px 20px", alignItems: "center" }}>
               {summary.training_status && (
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 12, color: "#6b7280" }}>Training Status</span>
+                  <span style={{ fontSize: 12, color: "#6b7280" }}><HelpTerm>Training Status</HelpTerm></span>
                   <TrainingStatusBadge status={summary.training_status} />
                 </div>
               )}
               {summary.endurance_score != null && (
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 12, color: "#6b7280" }}>Endurance Score</span>
+                  <span style={{ fontSize: 12, color: "#6b7280" }}><HelpTerm>Endurance Score</HelpTerm></span>
                   <span style={{ fontWeight: 700, color: "#10b981", fontSize: 16 }}>
                     {Math.round(summary.endurance_score)}
                   </span>
@@ -80,14 +81,14 @@ export function Wellness() {
           <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", gap: "8px 24px", alignItems: "center" }}>
             {summary.readiness_score != null && (
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 12, color: "#6b7280" }}>Readiness</span>
+                <span style={{ fontSize: 12, color: "#6b7280" }}><HelpTerm>Readiness</HelpTerm></span>
                 <ReadinessBadge score={summary.readiness_score} />
               </div>
             )}
             {summary.training_readiness_score != null && (
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 12, color: "#6b7280" }}>
-                  Garmin Readiness
+                  <HelpTerm>Garmin Readiness</HelpTerm>
                   {summary.training_readiness_description && (
                     <span style={{ marginLeft: 4, fontStyle: "italic" }}>
                       ({summary.training_readiness_description.toLowerCase().replace(/_/g, " ")})
@@ -102,7 +103,7 @@ export function Wellness() {
           {/* Sleep stages breakdown for today */}
           {(summary.sleep_deep_seconds != null || summary.sleep_rem_seconds != null) && (
             <div style={{ marginTop: 20 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>Last night's sleep</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}><HelpTerm>Sleep</HelpTerm></div>
               <SleepStageBreakdown summary={summary} />
             </div>
           )}
@@ -161,7 +162,7 @@ export function Wellness() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 40 }}>
-      <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 14, color: "#111" }}>{title}</h2>
+      <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 14, color: "#111" }}><HelpTerm>{title}</HelpTerm></h2>
       {children}
     </div>
   );

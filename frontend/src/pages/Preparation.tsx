@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../api/client";
 import type { PlannedWorkout, PreparationPlan, SeasonPlan, TrainingEvent } from "../api/client";
+import { HelpTerm } from "../components/Help";
 import { useAthleteContext } from "../main";
 
 type EventForm = {
@@ -200,6 +201,7 @@ export function Preparation() {
         )}
       </div>
 
+      <ModeSwitch activePanel={activePanel} onActivePanelChange={setActivePanel} />
       <PlanSettings options={planOptions} onOptionsChange={setPlanOptions} />
 
       <div style={APP_LAYOUT}>
@@ -264,7 +266,6 @@ export function Preparation() {
               plan={plan}
               seasonPlan={seasonPlan ?? null}
               activePanel={activePanel}
-              onActivePanelChange={setActivePanel}
               discussion={discussion}
               question={question}
               onQuestionChange={setQuestion}
@@ -292,14 +293,13 @@ export function Preparation() {
 }
 
 function PlanView({
-  event, plan, seasonPlan, activePanel, onActivePanelChange, discussion, question, onQuestionChange, onAsk, discussing,
+  event, plan, seasonPlan, activePanel, discussion, question, onQuestionChange, onAsk, discussing,
   plannedWorkouts, onSavePlan, savingPlan, onSaveSeasonPlan, savingSeasonPlan, onUpdateWorkout, updatingWorkout, onDelete, deleting,
 }: {
   event: TrainingEvent;
   plan: PreparationPlan;
   seasonPlan: SeasonPlan | null;
   activePanel: "plan" | "calendar" | "discuss";
-  onActivePanelChange: (panel: "plan" | "calendar" | "discuss") => void;
   discussion: Array<{ role: "user" | "plan"; text: string }>;
   question: string;
   onQuestionChange: (value: string) => void;
@@ -345,18 +345,6 @@ function PlanView({
           savingSeasonPlan={savingSeasonPlan}
         />
       )}
-
-      <div style={TAB_BAR}>
-        {(["plan", "calendar", "discuss"] as const).map((panel) => (
-          <button
-            key={panel}
-            onClick={() => onActivePanelChange(panel)}
-            style={activePanel === panel ? ACTIVE_TAB_BTN : TAB_BTN}
-          >
-            {panel === "plan" ? "Plan" : panel === "calendar" ? "Calendar" : "Discuss"}
-          </button>
-        ))}
-      </div>
 
       {activePanel === "plan" && (
         <div style={PANEL}>
@@ -448,6 +436,32 @@ function PlanView({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function ModeSwitch({ activePanel, onActivePanelChange }: {
+  activePanel: "plan" | "calendar" | "discuss";
+  onActivePanelChange: (panel: "plan" | "calendar" | "discuss") => void;
+}) {
+  return (
+    <div style={MODE_SWITCH}>
+      {(["plan", "calendar", "discuss"] as const).map((panel) => (
+        <button
+          key={panel}
+          onClick={() => onActivePanelChange(panel)}
+          style={activePanel === panel ? ACTIVE_MODE_BTN : MODE_BTN}
+        >
+          <strong>{panel === "plan" ? "Plan" : panel === "calendar" ? "Calendar" : "Discuss"}</strong>
+          <span>
+            {panel === "plan"
+              ? "Generate and align training"
+              : panel === "calendar"
+                ? "Edit saved workouts"
+                : "Ask and adjust"}
+          </span>
+        </button>
+      ))}
     </div>
   );
 }
@@ -614,7 +628,7 @@ function EmptyPlan() {
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div style={METRIC}>
-      <span>{label}</span>
+      <span><HelpTerm>{label}</HelpTerm></span>
       <strong>{value}</strong>
     </div>
   );
@@ -632,7 +646,7 @@ function Field({
 }) {
   return (
     <label style={LABEL}>
-      {label}
+      <HelpTerm>{label}</HelpTerm>
       <input
         required={required}
         type={type}
@@ -655,7 +669,7 @@ function Select({
 }) {
   return (
     <label style={LABEL}>
-      {label}
+      <HelpTerm>{label}</HelpTerm>
       <select value={value} onChange={(event) => onChange(event.target.value)} style={INPUT}>
         {options.map((option) => <option key={option} value={option}>{option}</option>)}
       </select>
@@ -726,6 +740,9 @@ const SIDEBAR: React.CSSProperties = { display: "grid", gap: 12, alignSelf: "sta
 const MAIN_STACK: React.CSSProperties = { display: "grid", gap: 14, minWidth: 0 };
 const PANEL: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: 14, background: "#fff" };
 const PLAN_SETTINGS: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: 14, marginBottom: 18, display: "grid", gap: 12, background: "#fff" };
+const MODE_SWITCH: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 190px), 1fr))", gap: 10, marginBottom: 14 };
+const MODE_BTN: React.CSSProperties = { background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 8, padding: "12px 14px", cursor: "pointer", textAlign: "left", display: "grid", gap: 3 };
+const ACTIVE_MODE_BTN: React.CSSProperties = { ...MODE_BTN, background: "#e8f3ff", color: "#1f5f99", borderColor: "#3B8BD4" };
 const SECTION_HEADER: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: 14, alignItems: "flex-start", marginBottom: 12, flexWrap: "wrap" };
 const TWO_COL: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 10 };
 const SUMMARY: React.CSSProperties = { cursor: "pointer", fontSize: 15, fontWeight: 700, color: "#111827" };
@@ -743,9 +760,6 @@ const METRIC: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius:
 const WARNINGS: React.CSSProperties = { border: "1px solid #fbbf24", borderRadius: 8, background: "#fffbeb", color: "#92400e", padding: 12, display: "grid", gap: 6, marginTop: 12, fontSize: 13 };
 const HIGH_WARNING: React.CSSProperties = { border: "1px solid #f87171", borderRadius: 8, background: "#fef2f2", color: "#991b1b", padding: 12, display: "grid", gap: 6, marginTop: 12, fontSize: 13 };
 const CONTROL_GRID: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, border: "1px solid #e5e7eb", borderRadius: 8, padding: 14 };
-const TAB_BAR: React.CSSProperties = { display: "flex", gap: 8, marginTop: 16, marginBottom: 0, flexWrap: "wrap" };
-const TAB_BTN: React.CSSProperties = { background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 6, padding: "9px 14px", cursor: "pointer", fontWeight: 700 };
-const ACTIVE_TAB_BTN: React.CSSProperties = { ...TAB_BTN, background: "#e8f3ff", color: "#1f5f99", borderColor: "#3B8BD4" };
 const WEEK_ROW: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: 14, display: "flex", gap: 16, alignItems: "flex-start" };
 const SEASON_WEEK: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, display: "flex", gap: 12, alignItems: "flex-start", background: "#fff" };
 const WORKOUT_ROW: React.CSSProperties = { display: "grid", gap: 2, fontSize: 13, color: "#4b5563", borderLeft: "3px solid #bfdbfe", paddingLeft: 10 };

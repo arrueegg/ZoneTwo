@@ -1,4 +1,5 @@
 import type { WeekSummary } from "../hooks/useAnalysis";
+import { HelpTerm } from "./Help";
 
 interface Props {
   weeks: WeekSummary[];
@@ -41,7 +42,7 @@ export function WeeklySummaryTable({ weeks }: Props) {
         <tbody>
           {METRICS.map(({ key, label, fmt }) => (
             <tr key={key} style={{ borderBottom: "1px solid #f3f4f6" }}>
-              <td style={{ ...TD, color: "#6b7280", fontWeight: 500 }}>{label}</td>
+              <td style={{ ...TD, color: "#6b7280", fontWeight: 500 }}><HelpTerm>{label}</HelpTerm></td>
               {recent.map((w) => {
                 const val = w.averages[key];
                 const trend = w.trends[key] ?? "—";

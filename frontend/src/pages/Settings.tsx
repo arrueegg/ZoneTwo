@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAthleteContext } from "../main";
 import api from "../api/client";
+import { HelpTerm } from "../components/Help";
 
 const ATHLETE_ID_KEY = "zonetwo_athlete_id";
 const ATHLETE_NAME_KEY = "zonetwo_athlete_name";
@@ -261,7 +262,7 @@ function Field({
   return (
     <div>
       <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 4, color: "#374151" }}>
-        {label}
+        <HelpTerm>{label}</HelpTerm>
       </label>
       {hint && <p style={{ fontSize: 12, color: "#9ca3af", margin: "0 0 4px" }}>{hint}</p>}
       <input
@@ -278,7 +279,7 @@ function Field({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 32 }}>
-      <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>{title}</h2>
+      <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}><HelpTerm>{title}</HelpTerm></h2>
       {children}
     </div>
   );

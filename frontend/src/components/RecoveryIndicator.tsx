@@ -1,3 +1,5 @@
+import { HelpTerm } from "./Help";
+
 interface Props {
   hrv: number | null;
   hrv7DayAvg: number | null;
@@ -53,7 +55,9 @@ export function RecoveryIndicator({
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div style={{ textAlign: "center" }}>
-      <div style={{ fontSize: 11, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
+      <div style={{ fontSize: 11, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+        <HelpTerm>{label}</HelpTerm>
+      </div>
       <div style={{ fontSize: 20, fontWeight: 700, color: "#111" }}>{value}</div>
     </div>
   );

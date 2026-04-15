@@ -4,6 +4,7 @@ import {
   ResponsiveContainer, CartesianGrid,
 } from "recharts";
 import type { WellnessPoint } from "../hooks/useWellness";
+import { HelpTerm } from "./Help";
 
 interface Props {
   data: WellnessPoint[];
@@ -162,7 +163,7 @@ export function WellnessCharts({ data }: Props) {
 function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h3 style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 8 }}>{title}</h3>
+      <h3 style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 8 }}><HelpTerm>{title}</HelpTerm></h3>
       {children}
     </div>
   );
