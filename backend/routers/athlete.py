@@ -170,8 +170,12 @@ async def _full_sync(athlete_id: str) -> None:
         athlete = await db.get(Athlete, athlete_id)
         if not athlete:
             return
-        if athlete.garmin_email:
-            await sync_garmin_activities(athlete, db, days=90)
-        await sync_athlete_garmin(athlete, db, days=90)
+        if athlete.garmin_email and athlete.garmin_password_encrypted:
+            from services.crypto import decrypt
+            from integrations.garmin_unofficial import get_client
+            # Single login for the entire sync — shared across activities + wellness
+            client = await get_client(athlete.garmin_email, decrypt(athlete.garmin_password_encrypted))
+            await sync_garmin_activities(athlete, db, days=90, client=client)
+            await sync_athlete_garmin(athlete, db, days=90, client=client)
         await recalculate_training_load(athlete_id, db)
         print(f"[sync] Full sync complete for {athlete_id}")

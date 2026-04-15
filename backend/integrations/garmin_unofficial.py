@@ -2,40 +2,80 @@
 Garmin Connect integration via the unofficial garminconnect library.
 Uses email/password session auth — no API approval required.
 
-This is suitable for personal use. It can break when Garmin changes internal
-endpoints, but the library is actively maintained and recovers quickly.
+Session tokens are cached on disk (.garmin_tokens/<email>/) so re-syncing
+doesn't trigger a full login each time, which avoids Garmin's IP rate limits.
 """
 
 import asyncio
+import hashlib
+import time
 from datetime import date
+from pathlib import Path
 from typing import Any
 
 from garminconnect import Garmin, GarminConnectAuthenticationError
 
+# Tokens are stored next to this file's package root
+_TOKEN_DIR = Path(__file__).parent.parent / ".garmin_tokens"
 
-def _login(email: str, password: str) -> Garmin:
-    """Create and authenticate a Garmin session (blocking)."""
+
+def _token_path(email: str) -> str:
+    """Return a per-account token directory (uses email hash to avoid storing PII in filenames)."""
+    slug = hashlib.sha256(email.encode()).hexdigest()[:16]
+    path = _TOKEN_DIR / slug
+    path.mkdir(parents=True, exist_ok=True)
+    return str(path)
+
+
+def _login_with_cache(email: str, password: str) -> Garmin:
+    """
+    Create and authenticate a Garmin client, loading cached tokens when available.
+    Only performs a full login (which hits Garmin's auth servers) when the cached
+    token is missing or expired.
+    """
+    token_path = _token_path(email)
     client = Garmin(email=email, password=password)
-    client.login()
+    client.login(tokenstore=token_path)
     return client
 
 
 async def get_client(email: str, password: str) -> Garmin:
-    """Async wrapper around the blocking login call."""
-    return await asyncio.to_thread(_login, email, password)
+    """Async wrapper — returns an authenticated Garmin client (uses cached token if available)."""
+    return await asyncio.to_thread(_login_with_cache, email, password)
 
 
-async def fetch_athlete_profile(email: str, password: str) -> dict[str, Any]:
+def _with_retry(fn, *args, retries: int = 3, base_delay: float = 30.0, **kwargs) -> Any:
+    """
+    Call a blocking Garmin API function, retrying on 429 with exponential backoff.
+    Delays: 30s, 60s, 120s.
+    """
+    for attempt in range(retries):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as exc:
+            msg = str(exc)
+            if "429" in msg and attempt < retries - 1:
+                delay = base_delay * (2 ** attempt)
+                print(f"[garmin] 429 rate limit — waiting {int(delay)}s before retry {attempt + 2}/{retries}")
+                time.sleep(delay)
+            else:
+                raise
+
+
+async def fetch_athlete_profile(email: str, password: str, client: Garmin | None = None) -> dict[str, Any]:
     """
     Fetch profile metrics from Garmin: threshold HR, max HR, VO2max, fitness age, race predictions.
+    Pass an existing `client` to avoid a redundant login.
     """
-    client = await get_client(email, password)
+    if client is None:
+        client = await get_client(email, password)
+
     today_str = date.today().isoformat()
     profile: dict[str, Any] = {}
 
     # Lactate threshold HR
     try:
-        lt = await asyncio.to_thread(client.get_lactate_threshold)
+        lt = await asyncio.to_thread(_with_retry, client.get_lactate_threshold)
         print(f"[garmin] raw lactate threshold: {lt}")
         hr = lt.get("speed_and_heart_rate", {}).get("heartRate")
         if hr:
@@ -48,7 +88,7 @@ async def fetch_athlete_profile(email: str, password: str) -> dict[str, Any]:
 
     # Max HR + VO2max from max metrics
     try:
-        metrics = await asyncio.to_thread(client.get_max_metrics, today_str)
+        metrics = await asyncio.to_thread(_with_retry, client.get_max_metrics, today_str)
         print(f"[garmin] raw max metrics: {metrics}")
         if isinstance(metrics, list) and metrics:
             generic = metrics[0].get("generic", {})
@@ -64,13 +104,13 @@ async def fetch_athlete_profile(email: str, password: str) -> dict[str, Any]:
 
     # Fitness age
     try:
-        fa = await asyncio.to_thread(client.get_fitnessage_data, today_str)
+        fa = await asyncio.to_thread(_with_retry, client.get_fitnessage_data, today_str)
         age = fa.get("fitnessAge") or fa.get("biologicalAge") if fa else None
         if age is not None:
             profile["fitness_age"] = int(age)
             print(f"[garmin] fitness age: {profile['fitness_age']}")
         else:
-            print(f"[garmin] fitness age not available")
+            print("[garmin] fitness age not available")
     except Exception as exc:
         print(f"[garmin] Could not fetch fitness age: {exc}")
 
@@ -82,7 +122,7 @@ async def fetch_athlete_profile(email: str, password: str) -> dict[str, Any]:
         "timeMarathon": "marathon",
     }
     try:
-        preds = await asyncio.to_thread(client.get_race_predictions)
+        preds = await asyncio.to_thread(_with_retry, client.get_race_predictions)
         races = {}
         if isinstance(preds, dict):
             for garmin_key, our_key in _RACE_KEY_MAP.items():
@@ -97,9 +137,9 @@ async def fetch_athlete_profile(email: str, password: str) -> dict[str, Any]:
                     races[t.lower()] = int(secs)
         if races:
             profile["race_predictions"] = races
-            print(f"[garmin] race predictions: { {k: v for k, v in races.items()} }")
+            print(f"[garmin] race predictions: {races}")
         else:
-            print(f"[garmin] race predictions: none extracted")
+            print("[garmin] race predictions: none extracted")
     except Exception as exc:
         print(f"[garmin] Could not fetch race predictions: {exc}")
 
@@ -107,12 +147,15 @@ async def fetch_athlete_profile(email: str, password: str) -> dict[str, Any]:
 
 
 async def fetch_daily_extras(
-    email: str, password: str, start: date, end: date
+    email: str, password: str, start: date, end: date, client: Garmin | None = None,
 ) -> list[dict[str, Any]]:
     """
     Fetch daily training status and endurance score for each day in the range.
+    Pass an existing `client` to avoid a redundant login.
     """
-    client = await get_client(email, password)
+    if client is None:
+        client = await get_client(email, password)
+
     results = []
     current = start
     from datetime import timedelta
@@ -122,15 +165,18 @@ async def fetch_daily_extras(
         entry: dict[str, Any] = {"date": day_str}
 
         try:
-            ts = await asyncio.to_thread(client.get_training_status, day_str)
+            ts = await asyncio.to_thread(_with_retry, client.get_training_status, day_str)
             if ts:
-                entry["training_status"] = ts.get("trainingStatus") or ts.get("latestTrainingStatusRecord", {}).get("trainingStatus")
+                entry["training_status"] = (
+                    ts.get("trainingStatus")
+                    or ts.get("latestTrainingStatusRecord", {}).get("trainingStatus")
+                )
                 entry["training_load_balance"] = ts.get("trainingLoadBalance")
         except Exception:
             pass
 
         try:
-            es = await asyncio.to_thread(client.get_endurance_score, day_str)
+            es = await asyncio.to_thread(_with_retry, client.get_endurance_score, day_str)
             if isinstance(es, list) and es:
                 entry["endurance_score"] = es[0].get("value") or es[0].get("enduranceScoreValue")
             elif isinstance(es, dict):
@@ -146,13 +192,14 @@ async def fetch_daily_extras(
 
 
 async def fetch_daily_wellness(
-    email: str, password: str, start: date, end: date
+    email: str, password: str, start: date, end: date, client: Garmin | None = None,
 ) -> list[dict[str, Any]]:
     """
     Fetch daily wellness summary for each day in the range.
-    Returns a list of dicts keyed by date string.
+    Pass an existing `client` to avoid a redundant login.
     """
-    client = await get_client(email, password)
+    if client is None:
+        client = await get_client(email, password)
 
     results = []
     current = start
@@ -161,12 +208,9 @@ async def fetch_daily_wellness(
     while current <= end:
         day_str = current.isoformat()
         try:
-            data = await asyncio.to_thread(
-                client.get_stats, day_str
-            )
+            data = await asyncio.to_thread(_with_retry, client.get_stats, day_str)
             results.append({"date": day_str, "data": data})
         except Exception as exc:
-            # Skip days with no data rather than aborting the whole range
             print(f"[garmin] No wellness data for {day_str}: {exc}")
         current += timedelta(days=1)
 
@@ -174,10 +218,14 @@ async def fetch_daily_wellness(
 
 
 async def fetch_hrv(
-    email: str, password: str, start: date, end: date
+    email: str, password: str, start: date, end: date, client: Garmin | None = None,
 ) -> list[dict[str, Any]]:
-    """Fetch HRV summary for each day in the range."""
-    client = await get_client(email, password)
+    """
+    Fetch HRV summary for each day in the range.
+    Pass an existing `client` to avoid a redundant login.
+    """
+    if client is None:
+        client = await get_client(email, password)
 
     results = []
     current = start
@@ -186,15 +234,46 @@ async def fetch_hrv(
     while current <= end:
         day_str = current.isoformat()
         try:
-            data = await asyncio.to_thread(
-                client.get_hrv_data, day_str
-            )
+            data = await asyncio.to_thread(_with_retry, client.get_hrv_data, day_str)
             results.append({"date": day_str, "data": data})
         except Exception as exc:
             print(f"[garmin] No HRV data for {day_str}: {exc}")
         current += timedelta(days=1)
 
     return results
+
+
+async def fetch_activities(
+    email: str, password: str, start: date, end: date, client: Garmin | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Fetch all activities in the date range from Garmin Connect.
+    Pass an existing `client` to avoid a redundant login.
+    """
+    if client is None:
+        client = await get_client(email, password)
+
+    all_activities = []
+    offset = 0
+    limit = 100
+
+    while True:
+        batch = await asyncio.to_thread(_with_retry, client.get_activities, offset, limit)
+        if not batch:
+            break
+        for activity in batch:
+            act_date_str = activity.get("startTimeLocal", "")[:10]
+            try:
+                act_date = date.fromisoformat(act_date_str)
+            except ValueError:
+                continue
+            if act_date < start:
+                return all_activities
+            if act_date <= end:
+                all_activities.append(activity)
+        offset += limit
+
+    return all_activities
 
 
 SPORT_TYPE_MAP: dict[int, str] = {
@@ -211,37 +290,6 @@ SPORT_TYPE_MAP: dict[int, str] = {
 }
 
 
-async def fetch_activities(
-    email: str, password: str, start: date, end: date
-) -> list[dict[str, Any]]:
-    """Fetch all activities in the date range from Garmin Connect."""
-    client = await get_client(email, password)
-
-    all_activities = []
-    offset = 0
-    limit = 100
-
-    while True:
-        batch = await asyncio.to_thread(client.get_activities, offset, limit)
-        if not batch:
-            break
-        for activity in batch:
-            # Parse activity date
-            act_date_str = activity.get("startTimeLocal", "")[:10]
-            try:
-                act_date = date.fromisoformat(act_date_str)
-            except ValueError:
-                continue
-            if act_date < start:
-                # Activities are returned newest-first; stop once we pass the range
-                return all_activities
-            if act_date <= end:
-                all_activities.append(activity)
-        offset += limit
-
-    return all_activities
-
-
 def normalize_garmin_activity(raw: dict[str, Any], athlete_id: str) -> dict[str, Any]:
     """Map a raw Garmin activity summary to our unified Activity schema."""
     from datetime import datetime
@@ -254,7 +302,6 @@ def normalize_garmin_activity(raw: dict[str, Any], athlete_id: str) -> dict[str,
 
     sport_type = SPORT_TYPE_MAP.get(raw.get("sportTypeId", 0), "other")
 
-    # HR zones: Garmin gives seconds in each zone
     hr_zones = {
         "z1": raw.get("hrTimeInZone_1"),
         "z2": raw.get("hrTimeInZone_2"),
@@ -262,11 +309,9 @@ def normalize_garmin_activity(raw: dict[str, Any], athlete_id: str) -> dict[str,
         "z4": raw.get("hrTimeInZone_4"),
         "z5": raw.get("hrTimeInZone_5"),
     }
-    # Only include if at least one zone has data
     if not any(v for v in hr_zones.values()):
         hr_zones = None
 
-    # Garmin's activityTrainingLoad is their TSS equivalent
     tss = raw.get("activityTrainingLoad")
 
     avg_speed = raw.get("averageSpeed")

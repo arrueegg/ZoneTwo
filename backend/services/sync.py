@@ -60,7 +60,12 @@ async def sync_athlete_strava(athlete: Athlete, db: AsyncSession) -> int:
     return upserted
 
 
-async def sync_garmin_activities(athlete: Athlete, db: AsyncSession, days: int = 90) -> int:
+async def sync_garmin_activities(
+    athlete: Athlete,
+    db: AsyncSession,
+    days: int = 90,
+    client=None,
+) -> int:
     """Pull Garmin activities, normalize them, and upsert into the activities table."""
     if not athlete.garmin_email or not athlete.garmin_password_encrypted:
         return 0
@@ -69,8 +74,13 @@ async def sync_garmin_activities(athlete: Athlete, db: AsyncSession, days: int =
     end = date_type.today()
     start = end - timedelta(days=days)
 
+    # Create one shared client for the entire sync if not provided
+    if client is None:
+        from integrations.garmin_unofficial import get_client
+        client = await get_client(athlete.garmin_email, password)
+
     # Sync profile metrics from Garmin (always overwrite with Garmin's measured values)
-    garmin_profile = await fetch_athlete_profile(athlete.garmin_email, password)
+    garmin_profile = await fetch_athlete_profile(athlete.garmin_email, password, client=client)
     for field in ("threshold_hr", "max_hr", "vo2max", "fitness_age", "race_predictions"):
         value = garmin_profile.get(field)
         if value is not None:
@@ -82,7 +92,7 @@ async def sync_garmin_activities(athlete: Athlete, db: AsyncSession, days: int =
     await db.commit()  # persist threshold/max HR before processing activities
 
     print(f"[garmin] Fetching activities for {athlete.id} ({start} → {end})")
-    raw_activities = await fetch_activities(athlete.garmin_email, password, start, end)
+    raw_activities = await fetch_activities(athlete.garmin_email, password, start, end, client=client)
 
     upserted = 0
     tss_from_hr = 0
@@ -122,7 +132,12 @@ async def sync_garmin_activities(athlete: Athlete, db: AsyncSession, days: int =
     return upserted
 
 
-async def sync_athlete_garmin(athlete: Athlete, db: AsyncSession, days: int = 30) -> int:
+async def sync_athlete_garmin(
+    athlete: Athlete,
+    db: AsyncSession,
+    days: int = 30,
+    client=None,
+) -> int:
     """
     Pull Garmin wellness + HRV data for the last `days` days and merge into daily_metrics.
     Returns the number of days updated.
@@ -134,11 +149,15 @@ async def sync_athlete_garmin(athlete: Athlete, db: AsyncSession, days: int = 30
     end = date_type.today()
     start = end - timedelta(days=days)
 
+    if client is None:
+        from integrations.garmin_unofficial import get_client
+        client = await get_client(athlete.garmin_email, password)
+
     print(f"[garmin] Fetching wellness + HRV for {athlete.id} ({start} → {end})")
 
-    wellness_list = await fetch_daily_wellness(athlete.garmin_email, password, start, end)
-    hrv_list = await fetch_hrv(athlete.garmin_email, password, start, end)
-    extras_list = await fetch_daily_extras(athlete.garmin_email, password, start, end)
+    wellness_list = await fetch_daily_wellness(athlete.garmin_email, password, start, end, client=client)
+    hrv_list = await fetch_hrv(athlete.garmin_email, password, start, end, client=client)
+    extras_list = await fetch_daily_extras(athlete.garmin_email, password, start, end, client=client)
 
     hrv_by_date = {item["date"]: item["data"] for item in hrv_list}
     extras_by_date = {item["date"]: item for item in extras_list}

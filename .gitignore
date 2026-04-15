@@ -24,5 +24,8 @@ frontend/dist/
 # Docker
 *.log
 
+# Garmin session token cache (per-user, never commit)
+.garmin_tokens/
+
 # OS
 .DS_Store
