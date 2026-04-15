@@ -7,11 +7,6 @@ const ATHLETE_ID_KEY = "zonetwo_athlete_id";
 const ATHLETE_NAME_KEY = "zonetwo_athlete_name";
 
 interface AthleteProfile {
-  threshold_hr: number | null;
-  max_hr: number | null;
-  goal: string | null;
-  target_race: string | null;
-  target_ctl: number | null;
   strava_connected: boolean;
   garmin_connected: boolean;
   garmin_email: string | null;
@@ -20,16 +15,10 @@ interface AthleteProfile {
 export function Settings() {
   const { athleteId, name, logout } = useAthleteContext();
   const [profile, setProfile] = useState<AthleteProfile>({
-    threshold_hr: null,
-    max_hr: null,
-    goal: null,
-    target_race: null,
-    target_ctl: null,
     strava_connected: false,
     garmin_connected: false,
     garmin_email: null,
   });
-  const [saved, setSaved] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState("");
   const [garminEmail, setGarminEmail] = useState("");
@@ -41,24 +30,12 @@ export function Settings() {
     if (!athleteId) return;
     api.get(`/athlete/${athleteId}`).then(({ data }) => {
       setProfile({
-        threshold_hr: data.threshold_hr ?? null,
-        max_hr: data.max_hr ?? null,
-        goal: data.goal ?? null,
-        target_race: data.target_race ?? null,
-        target_ctl: data.target_ctl ?? null,
         strava_connected: data.strava_connected ?? false,
         garmin_connected: data.garmin_connected ?? false,
         garmin_email: data.garmin_email ?? null,
       });
     });
   }, [athleteId]);
-
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
-    await api.patch(`/athlete/${athleteId}`, profile);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  }
 
   async function handleGarminConnect(e: React.FormEvent) {
     e.preventDefault();
@@ -200,51 +177,6 @@ export function Settings() {
         </Section>
       )}
 
-      {athleteId && (
-        <Section title="Training Profile">
-          <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <Field
-              label="Threshold HR (bpm)"
-              hint="Your lactate threshold heart rate — used to calculate TSS"
-              value={profile.threshold_hr ?? ""}
-              onChange={(v) => setProfile((p) => ({ ...p, threshold_hr: v ? parseInt(v) : null }))}
-              type="number"
-              placeholder="e.g. 168"
-            />
-            <Field
-              label="Max HR (bpm)"
-              value={profile.max_hr ?? ""}
-              onChange={(v) => setProfile((p) => ({ ...p, max_hr: v ? parseInt(v) : null }))}
-              type="number"
-              placeholder="e.g. 192"
-            />
-            <Field
-              label="Goal"
-              value={profile.goal ?? ""}
-              onChange={(v) => setProfile((p) => ({ ...p, goal: v || null }))}
-              placeholder="e.g. sub-3:30 marathon"
-            />
-            <Field
-              label="Target Race"
-              value={profile.target_race ?? ""}
-              onChange={(v) => setProfile((p) => ({ ...p, target_race: v || null }))}
-              placeholder="e.g. Boston 2026"
-            />
-            <Field
-              label="Target CTL (fitness goal)"
-              hint="Sets a goal line on the Performance Management Chart"
-              value={profile.target_ctl ?? ""}
-              onChange={(v) => setProfile((p) => ({ ...p, target_ctl: v ? parseInt(v) : null }))}
-              type="number"
-              placeholder="e.g. 70"
-            />
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <button type="submit" style={primaryBtn}>Save</button>
-              {saved && <span style={{ fontSize: 13, color: "#065f46" }}>✓ Saved</span>}
-            </div>
-          </form>
-        </Section>
-      )}
     </div>
   );
 }
