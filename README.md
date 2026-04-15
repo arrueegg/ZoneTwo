@@ -5,58 +5,41 @@ Training analytics app connecting Strava and Garmin Connect. Shows performance m
 ## Prerequisites
 
 - Python 3.11+
-- Node.js 20+ (via NVM at `/scratch2/Program/nvm/`)
+- Node.js 18+
 
-## First-time setup
-
-### 1. Environment file
+## Quick start
 
 ```bash
-cp .env.example .env
+git clone https://github.com/arrueegg/ZoneTwo.git
+cd ZoneTwo
+./start.sh
 ```
 
-Fill in `.env`:
-- `STRAVA_CLIENT_ID` / `STRAVA_CLIENT_SECRET` — from [strava.com/settings/api](https://www.strava.com/settings/api)
-- `SECRET_KEY` — generate with `python3 -c "import secrets; print(secrets.token_hex(32))"`
-- `GROQ_API_KEY` — free, get one at [console.groq.com/keys](https://console.groq.com/keys). Needed for the AI weekly debrief.
+On first run the script will:
+1. Copy `.env.example` → `.env` and exit, asking you to fill in credentials
+2. On the next run: create the Python venv, install all dependencies, and launch both servers
+
+**Minimum `.env` values to fill in:**
+- `SECRET_KEY` — any random string, e.g. `python3 -c "import secrets; print(secrets.token_hex(32))"`
+- `GROQ_API_KEY` — free at [console.groq.com/keys](https://console.groq.com/keys) (needed for the AI debrief)
 - Leave `DATABASE_URL` as-is for local SQLite
+- `STRAVA_CLIENT_ID` / `STRAVA_CLIENT_SECRET` only needed if connecting Strava
 
-### 2. Backend
+App is at **http://localhost:3000** once both servers are running. Stop with `Ctrl-C`.
+
+## Manual setup (optional)
+
+If you prefer separate terminals:
 
 ```bash
-cd backend
-python3 -m venv .venv
-source .venv/bin/activate
+# Backend
+cd backend && python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-```
-
-### 3. Frontend
-
-```bash
-source /scratch2/Program/nvm/nvm.sh
-cd frontend
-npm install
-```
-
-## Running locally
-
-Open two terminals.
-
-**Terminal 1 — backend:**
-```bash
-cd backend
-source .venv/bin/activate
 uvicorn main:app --reload --port 8000
-```
 
-**Terminal 2 — frontend:**
-```bash
-source /scratch2/Program/nvm/nvm.sh
-cd frontend
-npm run dev
+# Frontend (separate terminal)
+cd frontend && npm install && npm run dev
 ```
-
-App is at **http://localhost:3000**. The frontend proxies `/api` → `http://localhost:8000`.
 
 ## Connecting your data
 
