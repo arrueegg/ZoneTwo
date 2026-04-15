@@ -121,14 +121,11 @@ export function Wellness() {
       )}
 
       {/* Insights */}
-      {analysis && (
+      {analysis?.anomalies?.length ? (
         <Section title="Insights">
-          <InsightsPanel
-            anomalies={analysis.anomalies}
-            correlations={analysis.correlations}
-          />
+          <InsightsPanel anomalies={analysis.anomalies} />
         </Section>
-      )}
+      ) : null}
 
       {/* Weekly summary table */}
       {analysis?.weekly_summary?.length ? (

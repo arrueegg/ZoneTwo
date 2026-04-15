@@ -115,7 +115,7 @@ export function Dashboard() {
       {/* Anomaly flags */}
       {analysis?.anomalies?.length ? (
         <Section title="Flags">
-          <InsightsPanel anomalies={analysis.anomalies} correlations={[]} />
+          <InsightsPanel anomalies={analysis.anomalies} />
         </Section>
       ) : null}
 
@@ -166,13 +166,6 @@ export function Dashboard() {
       <Section title="Weekly AI Debrief">
         <AiWeeklySummary athleteId={athleteId} />
       </Section>
-
-      {/* Correlations */}
-      {analysis?.correlations?.length ? (
-        <Section title="Your Patterns">
-          <InsightsPanel anomalies={[]} correlations={analysis.correlations} />
-        </Section>
-      ) : null}
 
       {/* Glossary */}
       <div style={{ borderTop: "1px solid #f3f4f6", paddingTop: 24, marginTop: 8 }}>
