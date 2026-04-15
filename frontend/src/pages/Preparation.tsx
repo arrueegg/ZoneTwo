@@ -559,7 +559,16 @@ function CoachWorkspace({
       )}
       <div style={DISCUSS_BOX}>
         {discussion.length === 0 && (
-          <p style={{ ...MUTED, margin: 0 }}>{coachPromptForTopic(topic)}</p>
+          <div style={{ display: "grid", gap: 8 }}>
+            <p style={{ ...MUTED, margin: 0 }}>{coachPromptForTopic(topic)}</p>
+            <div style={SUGGESTION_ROW}>
+              {coachSuggestionsForTopic(topic).map((suggestion) => (
+                <button key={suggestion} onClick={() => onQuestionChange(suggestion)} style={SUGGESTION_BTN}>
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
         {discussion.map((item, index) => (
           <div key={index} style={item.role === "user" ? USER_MSG : PLAN_MSG}>
@@ -573,7 +582,7 @@ function CoachWorkspace({
             onKeyDown={(event) => {
               if (event.key === "Enter") onAsk();
             }}
-            placeholder="I feel tired this week. What should change in the season plan?"
+            placeholder={coachPlaceholderForTopic(topic)}
             style={{ ...INPUT, flex: 1 }}
           />
           <button onClick={onAsk} disabled={discussing || !question.trim()} style={PRIMARY_BTN}>
@@ -783,13 +792,35 @@ function defaultWorkoutDescription(type: string): string {
 
 function coachPromptForTopic(topic: CoachTopic): string {
   const prompts: Record<CoachTopic, string> = {
-    season: "Try: “does this season build logically?” or “make the next block easier”.",
-    target: "Choose a target, then ask: “is this race realistic?” or “how should this target shape the plan?”",
-    health: "Try: “I feel tired this week”, “my sleep is bad”, or “reduce injury risk”.",
-    schedule: "Try: “move long runs to Saturday” or “I can only run 3 days”.",
-    workouts: "Try: “add intervals”, “make the quality day easier”, or “change this to tempo work”.",
+    season: "Suggested season questions",
+    target: "Suggested target questions",
+    health: "Suggested health and recovery questions",
+    schedule: "Suggested schedule questions",
+    workouts: "Suggested workout questions",
   };
   return prompts[topic];
+}
+
+function coachSuggestionsForTopic(topic: CoachTopic): string[] {
+  const suggestions: Record<CoachTopic, string[]> = {
+    season: ["Does this season build logically?", "Make the next block easier", "Where are the risky weeks?"],
+    target: ["Is this target realistic?", "How should this target shape the plan?", "Should this be an A or B race?"],
+    health: ["I feel tired this week. What should change?", "My sleep is bad. Reduce the load.", "How do we lower injury risk?"],
+    schedule: ["Move long runs to Saturday", "I can only run 3 days", "Make this work around a busy week"],
+    workouts: ["Add intervals carefully", "Make the quality day easier", "Change this to tempo work"],
+  };
+  return suggestions[topic];
+}
+
+function coachPlaceholderForTopic(topic: CoachTopic): string {
+  const placeholders: Record<CoachTopic, string> = {
+    season: "Ask about the full season structure...",
+    target: "Ask about the selected target...",
+    health: "Ask how recovery should change the plan...",
+    schedule: "Ask how to fit the plan into your week...",
+    workouts: "Ask how to adjust workout types or intensity...",
+  };
+  return placeholders[topic];
 }
 
 function formatCoachMessage(message: string, topic: CoachTopic, target: TrainingEvent | undefined): string {
@@ -885,6 +916,8 @@ const DISCUSS_BOX: React.CSSProperties = { border: "1px solid #e5e7eb", borderRa
 const TOPIC_GRID: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))", gap: 8, marginBottom: 12 };
 const TOPIC_BTN: React.CSSProperties = { background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 8, padding: "10px 12px", cursor: "pointer", textAlign: "left", display: "grid", gap: 4 };
 const ACTIVE_TOPIC_BTN: React.CSSProperties = { ...TOPIC_BTN, background: "#f0fdfa", borderColor: "#14b8a6", color: "#0f766e" };
+const SUGGESTION_ROW: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: 8 };
+const SUGGESTION_BTN: React.CSSProperties = { background: "#f8fafc", color: "#475569", border: "1px solid #cbd5e1", borderRadius: 6, padding: "7px 9px", cursor: "pointer", fontSize: 13 };
 const USER_MSG: React.CSSProperties = { justifySelf: "end", maxWidth: "85%", background: "#e0f2fe", color: "#075985", borderRadius: 8, padding: "8px 10px", fontSize: 13 };
 const PLAN_MSG: React.CSSProperties = { justifySelf: "start", maxWidth: "85%", background: "#f3f4f6", color: "#374151", borderRadius: 8, padding: "8px 10px", fontSize: 13 };
 const EMPTY_BOX: React.CSSProperties = { border: "1px dashed #d1d5db", borderRadius: 8, padding: 14, color: "#6b7280", fontSize: 13 };
