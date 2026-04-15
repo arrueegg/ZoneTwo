@@ -1,5 +1,6 @@
 from models.activity import Activity
 from models.athlete import Athlete
 from models.metrics import DailyMetrics
+from models.preparation import TrainingEvent
 
-__all__ = ["Activity", "Athlete", "DailyMetrics"]
+__all__ = ["Activity", "Athlete", "DailyMetrics", "TrainingEvent"]

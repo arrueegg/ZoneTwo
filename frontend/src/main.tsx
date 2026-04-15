@@ -8,6 +8,7 @@ import { ActivityDetail } from "./pages/ActivityDetail";
 import { Wellness } from "./pages/Wellness";
 import { Settings } from "./pages/Settings";
 import { Coach } from "./pages/Coach";
+import { Preparation } from "./pages/Preparation";
 import { useAthlete } from "./hooks/useAthlete";
 
 const queryClient = new QueryClient({
@@ -52,6 +53,7 @@ function App() {
           <strong style={{ marginRight: 8 }}>ZoneTwo</strong>
           <NavLink to="/" end style={navStyle}>Dashboard</NavLink>
           <NavLink to="/activities" style={navStyle}>Activities</NavLink>
+          <NavLink to="/preparation" style={navStyle}>Preparation</NavLink>
           <NavLink to="/wellness" style={navStyle}>Wellness</NavLink>
           <NavLink to="/coach" style={navStyle}>Coach</NavLink>
           <NavLink to="/settings" style={navStyle}>Settings</NavLink>
@@ -65,6 +67,7 @@ function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/activities" element={<Activities />} />
           <Route path="/activities/:activityId" element={<ActivityDetail />} />
+          <Route path="/preparation" element={<Preparation />} />
           <Route path="/wellness" element={<Wellness />} />
           <Route path="/coach" element={<Coach />} />
           <Route path="/settings" element={<Settings />} />

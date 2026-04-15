@@ -66,6 +66,74 @@ export interface ActivityTrack {
   splits: Split[];
 }
 
+export interface TrainingEvent {
+  id: string;
+  athlete_id: string;
+  name: string;
+  event_date: string;
+  event_type: string;
+  target_distance_km: number | null;
+  target_time_sec: number | null;
+  priority: "A" | "B" | "C";
+  notes: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface PreparationWorkout {
+  type: string;
+  day: string;
+  distance_km: number;
+  title: string;
+  description: string;
+}
+
+export interface PreparationWeek {
+  week: number;
+  starts_on: string;
+  focus: string;
+  target_km: number;
+  long_run_km: number;
+  workouts: PreparationWorkout[];
+  adjustment_note: string;
+}
+
+export interface PreparationPlan {
+  event: TrainingEvent;
+  context: {
+    days_to_event: number;
+    weeks_to_event: number;
+    target_distance_km: number | null;
+    target_time_sec: number | null;
+    target_pace_sec_km: number | null;
+    recent_weekly_km: number;
+    recent_weekly_hours: number;
+    recent_runs_per_week: number;
+    recent_long_run_km: number;
+    ctl: number | null;
+    atl: number | null;
+    tsb: number | null;
+    readiness_score: number | null;
+    sleep_score: number | null;
+    stress_avg: number | null;
+    target_ctl: number | null;
+    threshold_hr: number | null;
+  };
+  options: {
+    days_per_week: number;
+    max_weekly_km: number | null;
+    long_run_day: string;
+    emphasis: string;
+  };
+  summary: {
+    headline: string;
+    current_load: string;
+    target: string;
+    risk_flags: string[];
+  };
+  weeks: PreparationWeek[];
+}
+
 export interface Insight {
   type: "warning" | "positive" | "info";
   title: string;

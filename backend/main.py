@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from config import settings
 from database import create_tables
 from models import track as _track_model  # noqa: F401 — registers ActivityTrack with Base
-from routers import auth, activities, athlete, metrics, recommendations, coach
+from routers import auth, activities, athlete, metrics, recommendations, coach, preparation
 
 
 @asynccontextmanager
@@ -31,6 +31,7 @@ app.include_router(activities.router)
 app.include_router(metrics.router)
 app.include_router(recommendations.router)
 app.include_router(coach.router)
+app.include_router(preparation.router)
 
 
 @app.get("/health")
