@@ -75,6 +75,8 @@ npm run build   # also type-checks frontend
 
 ### Key architecture decisions
 
+**Frontend shell**: The app uses a left-side navigation rail in `frontend/src/main.tsx`, with page content rendered to the right. Keep primary navigation there instead of reintroducing a small top-row menu.
+
 **TSS sources** (in priority order):
 1. `activityTrainingLoad` from Garmin (direct)
 2. HR-based: `calculate_tss_from_hr(duration, avg_hr, threshold_hr)` — `(avg_hr/threshold_hr)² × duration / 3600 × 100`
@@ -97,6 +99,8 @@ npm run build   # also type-checks frontend
 **Preparation planning**: The frontend should use season-level planning as the only planning interaction. `GET /preparation/season-plan` returns the aligned proposal, and `POST /preparation/season-workouts/save` persists the edited proposal to `planned_workouts`. Legacy selected-event endpoints still exist for compatibility, but do not expose them as a competing planning workflow. Persist event intent and user decisions; derive recommendations from current data.
 
 **Season alignment**: Preparation has a single source of truth: the season plan. When multiple upcoming events overlap, the app must still produce only one training plan per week. `GET /preparation/season-plan` builds an aligned season view by selecting one primary event for each week and listing nearby supporting events. It flags conflicting target schedules such as A/B races too close together, too many priority targets in six weeks, or events with very different demands in the same block. `POST /preparation/season-workouts/save` persists the edited season proposal into future `planned_workouts`; `replace=true` replaces future planned workouts, not historical/completed entries. The Preparation frontend should not expose separate single-event plan or calendar workspaces. It has Events for target list/add/delete only, Season Plan for editing the proposed weekly workouts directly, and Coach for discussing the entire season plan and applying plan-setting changes back to the proposal.
+
+**Preparation workout editing**: Season Plan workout rows use controlled run-type choices (easy, recovery, long, steady, tempo, interval, hill, race pace, progression, strides, strength, rest), color-coded by type. Distances in the editable proposal are rounded to 0.5 km increments.
 
 **Coach context and preparation**: The AI Coach prompt includes upcoming preparation targets and saved upcoming planned workouts, so coach answers can account for target events plus accepted/completed/skipped workouts.
 

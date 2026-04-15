@@ -23,6 +23,30 @@ type PlanOptions = {
 };
 
 type WorkspaceMode = "events" | "season-plan" | "coach";
+type CoachTopic = "season" | "target" | "health" | "schedule" | "workouts";
+
+const RUN_TYPES = [
+  "easy",
+  "recovery",
+  "long",
+  "steady",
+  "tempo",
+  "interval",
+  "hill",
+  "race pace",
+  "progression",
+  "strides",
+  "strength",
+  "rest",
+];
+
+const COACH_TOPICS: Array<{ key: CoachTopic; label: string; prompt: string }> = [
+  { key: "season", label: "Season", prompt: "Talk about the full season plan and how the blocks fit together." },
+  { key: "target", label: "Target", prompt: "Focus on one target race or run and its role in the season." },
+  { key: "health", label: "Health", prompt: "Discuss fatigue, soreness, sleep, recovery, and risk." },
+  { key: "schedule", label: "Schedule", prompt: "Adjust run days, long-run timing, travel, and busy weeks." },
+  { key: "workouts", label: "Workouts", prompt: "Tune workout types, intensity, distance, and progression." },
+];
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -50,6 +74,8 @@ export function Preparation() {
   const [editableWeeks, setEditableWeeks] = useState<SeasonPlanWeek[]>([]);
   const [discussion, setDiscussion] = useState<Array<{ role: "user" | "plan"; text: string }>>([]);
   const [question, setQuestion] = useState("");
+  const [coachTopic, setCoachTopic] = useState<CoachTopic>("season");
+  const [coachTargetId, setCoachTargetId] = useState<string>("");
 
   const { data: events = [] } = useQuery<TrainingEvent[]>({
     queryKey: ["preparation-events", athleteId],
@@ -213,12 +239,16 @@ export function Preparation() {
       {workspaceMode === "coach" && (
         <CoachWorkspace
           events={targetItems}
+          topic={coachTopic}
+          onTopicChange={setCoachTopic}
+          targetId={coachTargetId}
+          onTargetChange={setCoachTargetId}
           discussion={discussion}
           question={question}
           onQuestionChange={setQuestion}
           onAsk={() => {
             if (!question.trim()) return;
-            discussSeason.mutate(question.trim());
+            discussSeason.mutate(formatCoachMessage(question.trim(), coachTopic, events.find((event) => event.id === coachTargetId)));
             setQuestion("");
           }}
           discussing={discussSeason.isPending}
@@ -375,7 +405,7 @@ function TargetManager({
 function EditableWeek({ week, onChange }: { week: SeasonPlanWeek; onChange: (week: SeasonPlanWeek) => void }) {
   return (
     <article style={SEASON_WEEK}>
-      <div style={{ minWidth: 110 }}>
+      <div style={WEEK_RAIL}>
         <strong>Week {week.week}</strong>
         <span style={{ display: "block", color: "#6b7280", fontSize: 12 }}>{formatDate(week.starts_on)}</span>
         <span style={{ display: "block", color: "#6b7280", fontSize: 12 }}>{week.primary_event_name}</span>
@@ -388,11 +418,11 @@ function EditableWeek({ week, onChange }: { week: SeasonPlanWeek; onChange: (wee
           </label>
           <label style={LABEL}>
             Target km
-            <input type="number" value={week.target_km} onChange={(event) => onChange({ ...week, target_km: Number(event.target.value) })} style={INPUT} />
+            <input type="number" step={0.5} value={week.target_km} onChange={(event) => onChange({ ...week, target_km: roundHalfKm(Number(event.target.value)) })} style={INPUT} />
           </label>
           <label style={LABEL}>
             Long run
-            <input type="number" value={week.long_run_km} onChange={(event) => onChange({ ...week, long_run_km: Number(event.target.value) })} style={INPUT} />
+            <input type="number" step={0.5} value={week.long_run_km} onChange={(event) => onChange({ ...week, long_run_km: roundHalfKm(Number(event.target.value)) })} style={INPUT} />
           </label>
         </div>
         <label style={LABEL}>
@@ -404,42 +434,12 @@ function EditableWeek({ week, onChange }: { week: SeasonPlanWeek; onChange: (wee
         )}
         <div style={{ display: "grid", gap: 8 }}>
           {week.workouts.map((workout, workoutIndex) => (
-            <div key={`${week.week}-${workoutIndex}`} style={WORKOUT_EDIT_ROW}>
-              <select
-                value={workout.day}
-                onChange={(event) => onChange({ ...week, workouts: replaceAt(week.workouts, workoutIndex, { ...workout, day: event.target.value }) })}
-                style={INPUT}
-              >
-                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => <option key={day} value={day}>{day}</option>)}
-              </select>
-              <input
-                value={workout.type}
-                onChange={(event) => onChange({ ...week, workouts: replaceAt(week.workouts, workoutIndex, { ...workout, type: event.target.value }) })}
-                style={INPUT}
-              />
-              <input
-                value={workout.title}
-                onChange={(event) => onChange({ ...week, workouts: replaceAt(week.workouts, workoutIndex, { ...workout, title: event.target.value }) })}
-                style={{ ...INPUT, minWidth: 160 }}
-              />
-              <input
-                type="number"
-                value={workout.distance_km}
-                onChange={(event) => onChange({ ...week, workouts: replaceAt(week.workouts, workoutIndex, { ...workout, distance_km: Number(event.target.value) }) })}
-                style={{ ...INPUT, width: 90 }}
-              />
-              <input
-                value={workout.description}
-                onChange={(event) => onChange({ ...week, workouts: replaceAt(week.workouts, workoutIndex, { ...workout, description: event.target.value }) })}
-                style={{ ...INPUT, flex: 1, minWidth: 220 }}
-              />
-              <button
-                onClick={() => onChange({ ...week, workouts: week.workouts.filter((_, index) => index !== workoutIndex) })}
-                style={SMALL_GHOST_BTN}
-              >
-                Remove
-              </button>
-            </div>
+            <WorkoutEditor
+              key={`${week.week}-${workoutIndex}`}
+              workout={workout}
+              onChange={(nextWorkout) => onChange({ ...week, workouts: replaceAt(week.workouts, workoutIndex, nextWorkout) })}
+              onRemove={() => onChange({ ...week, workouts: week.workouts.filter((_, index) => index !== workoutIndex) })}
+            />
           ))}
           <button
             onClick={() => onChange({
@@ -456,10 +456,67 @@ function EditableWeek({ week, onChange }: { week: SeasonPlanWeek; onChange: (wee
   );
 }
 
+function WorkoutEditor({
+  workout, onChange, onRemove,
+}: {
+  workout: SeasonPlanWeek["workouts"][number];
+  onChange: (workout: SeasonPlanWeek["workouts"][number]) => void;
+  onRemove: () => void;
+}) {
+  const typeStyle = workoutTypeStyle(workout.type);
+  const workoutType = normaliseWorkoutType(workout.type);
+
+  return (
+    <div style={{ ...WORKOUT_EDIT_ROW, borderColor: typeStyle.border, background: typeStyle.bg }}>
+      <div style={{ ...TYPE_STRIPE, background: typeStyle.color }} />
+      <div style={WORKOUT_FIELDS}>
+        <div style={WORKOUT_TOP_ROW}>
+          <select value={workout.day} onChange={(event) => onChange({ ...workout, day: event.target.value })} style={{ ...INPUT, minWidth: 82 }}>
+            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => <option key={day} value={day}>{day}</option>)}
+          </select>
+          <select
+            value={workoutType}
+            onChange={(event) => onChange({ ...workout, type: event.target.value, title: defaultWorkoutTitle(event.target.value, workout.title) })}
+            style={{ ...INPUT, minWidth: 128, borderColor: typeStyle.border }}
+          >
+            {RUN_TYPES.map((type) => <option key={type} value={type}>{titleCase(type)}</option>)}
+          </select>
+          <input
+            value={workout.title}
+            onChange={(event) => onChange({ ...workout, title: event.target.value })}
+            style={{ ...INPUT, flex: 1, minWidth: 170 }}
+          />
+          <label style={DISTANCE_BOX}>
+            <span>km</span>
+            <input
+              type="number"
+              step={0.5}
+              value={workout.distance_km}
+              onChange={(event) => onChange({ ...workout, distance_km: roundHalfKm(Number(event.target.value)) })}
+              style={DISTANCE_INPUT}
+            />
+          </label>
+          <button onClick={onRemove} style={SMALL_GHOST_BTN}>Remove</button>
+        </div>
+        <input
+          value={workout.description}
+          onChange={(event) => onChange({ ...workout, description: event.target.value })}
+          placeholder={defaultWorkoutDescription(workoutType)}
+          style={{ ...INPUT, width: "100%" }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function CoachWorkspace({
-  events, discussion, question, onQuestionChange, onAsk, discussing,
+  events, topic, onTopicChange, targetId, onTargetChange, discussion, question, onQuestionChange, onAsk, discussing,
 }: {
   events: Array<TrainingEvent & { daysLeft: number }>;
+  topic: CoachTopic;
+  onTopicChange: (topic: CoachTopic) => void;
+  targetId: string;
+  onTargetChange: (targetId: string) => void;
   discussion: Array<{ role: "user" | "plan"; text: string }>;
   question: string;
   onQuestionChange: (value: string) => void;
@@ -479,9 +536,30 @@ function CoachWorkspace({
           Current season: {events.map((event) => event.name).join(", ")}
         </p>
       )}
+      <div style={TOPIC_GRID}>
+        {COACH_TOPICS.map((item) => (
+          <button
+            key={item.key}
+            onClick={() => onTopicChange(item.key)}
+            style={topic === item.key ? ACTIVE_TOPIC_BTN : TOPIC_BTN}
+          >
+            <strong>{item.label}</strong>
+            <span>{item.prompt}</span>
+          </button>
+        ))}
+      </div>
+      {topic === "target" && (
+        <label style={{ ...LABEL, marginBottom: 12 }}>
+          Target
+          <select value={targetId} onChange={(event) => onTargetChange(event.target.value)} style={INPUT}>
+            <option value="">Choose a target</option>
+            {events.map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}
+          </select>
+        </label>
+      )}
       <div style={DISCUSS_BOX}>
         {discussion.length === 0 && (
-          <p style={{ ...MUTED, margin: 0 }}>Try: “make the next block easier”, “move long runs to Saturday”, or “I can only run 3 days”.</p>
+          <p style={{ ...MUTED, margin: 0 }}>{coachPromptForTopic(topic)}</p>
         )}
         {discussion.map((item, index) => (
           <div key={index} style={item.role === "user" ? USER_MSG : PLAN_MSG}>
@@ -606,11 +684,117 @@ function Select({ label, value, onChange, options }: {
 }
 
 function copyWeek(week: SeasonPlanWeek): SeasonPlanWeek {
-  return { ...week, workouts: week.workouts.map((workout) => ({ ...workout })) };
+  return {
+    ...week,
+    target_km: roundHalfKm(week.target_km),
+    long_run_km: roundHalfKm(week.long_run_km),
+    workouts: week.workouts.map((workout) => ({
+      ...workout,
+      type: normaliseWorkoutType(workout.type),
+      distance_km: roundHalfKm(workout.distance_km),
+    })),
+  };
 }
 
 function replaceAt<T>(items: T[], index: number, value: T): T[] {
   return items.map((item, itemIndex) => itemIndex === index ? value : item);
+}
+
+function roundHalfKm(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.round(value * 2) / 2);
+}
+
+function normaliseWorkoutType(type: string): string {
+  const lower = type.toLowerCase();
+  if (RUN_TYPES.includes(lower)) return lower;
+  if (lower.includes("interval")) return "interval";
+  if (lower.includes("tempo")) return "tempo";
+  if (lower.includes("hill")) return "hill";
+  if (lower.includes("long")) return "long";
+  if (lower.includes("recovery")) return "recovery";
+  if (lower.includes("race")) return "race pace";
+  if (lower.includes("strength")) return "strength";
+  if (lower.includes("rest")) return "rest";
+  if (lower.includes("speed")) return "interval";
+  return "easy";
+}
+
+function workoutTypeStyle(type: string): { color: string; bg: string; border: string } {
+  const styles: Record<string, { color: string; bg: string; border: string }> = {
+    easy: { color: "#0f766e", bg: "#f0fdfa", border: "#99f6e4" },
+    recovery: { color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0" },
+    long: { color: "#2563eb", bg: "#eff6ff", border: "#bfdbfe" },
+    steady: { color: "#4f46e5", bg: "#eef2ff", border: "#c7d2fe" },
+    tempo: { color: "#c2410c", bg: "#fff7ed", border: "#fed7aa" },
+    interval: { color: "#dc2626", bg: "#fef2f2", border: "#fecaca" },
+    hill: { color: "#7c3aed", bg: "#f5f3ff", border: "#ddd6fe" },
+    "race pace": { color: "#be123c", bg: "#fff1f2", border: "#fecdd3" },
+    progression: { color: "#0891b2", bg: "#ecfeff", border: "#a5f3fc" },
+    strides: { color: "#9333ea", bg: "#faf5ff", border: "#e9d5ff" },
+    strength: { color: "#475569", bg: "#f8fafc", border: "#cbd5e1" },
+    rest: { color: "#64748b", bg: "#f8fafc", border: "#e2e8f0" },
+  };
+  return styles[normaliseWorkoutType(type)] ?? styles.easy;
+}
+
+function titleCase(value: string): string {
+  return value.replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function defaultWorkoutTitle(type: string, currentTitle: string): string {
+  const defaults: Record<string, string> = {
+    easy: "Easy run",
+    recovery: "Recovery run",
+    long: "Long run",
+    steady: "Steady run",
+    tempo: "Tempo run",
+    interval: "Interval session",
+    hill: "Hill session",
+    "race pace": "Race-pace workout",
+    progression: "Progression run",
+    strides: "Strides",
+    strength: "Strength",
+    rest: "Rest day",
+  };
+  const current = currentTitle.trim().toLowerCase();
+  const knownTitles = Object.values(defaults).map((title) => title.toLowerCase());
+  if (!current || knownTitles.includes(current)) return defaults[type] ?? titleCase(type);
+  return currentTitle;
+}
+
+function defaultWorkoutDescription(type: string): string {
+  const descriptions: Record<string, string> = {
+    easy: "Comfortable aerobic running.",
+    recovery: "Very easy running to absorb training.",
+    long: "Relaxed endurance run.",
+    steady: "Controlled moderate effort.",
+    tempo: "Sustained comfortably hard work.",
+    interval: "Structured faster repeats with recoveries.",
+    hill: "Uphill repeats or rolling strength work.",
+    "race pace": "Controlled work around target pace.",
+    progression: "Start easy and finish stronger.",
+    strides: "Short relaxed accelerations.",
+    strength: "Strength, mobility, or stability work.",
+    rest: "No run planned.",
+  };
+  return descriptions[type] ?? "Workout notes.";
+}
+
+function coachPromptForTopic(topic: CoachTopic): string {
+  const prompts: Record<CoachTopic, string> = {
+    season: "Try: “does this season build logically?” or “make the next block easier”.",
+    target: "Choose a target, then ask: “is this race realistic?” or “how should this target shape the plan?”",
+    health: "Try: “I feel tired this week”, “my sleep is bad”, or “reduce injury risk”.",
+    schedule: "Try: “move long runs to Saturday” or “I can only run 3 days”.",
+    workouts: "Try: “add intervals”, “make the quality day easier”, or “change this to tempo work”.",
+  };
+  return prompts[topic];
+}
+
+function formatCoachMessage(message: string, topic: CoachTopic, target: TrainingEvent | undefined): string {
+  const targetText = topic === "target" && target ? ` Target: ${target.name} on ${target.event_date}.` : "";
+  return `[Topic: ${titleCase(topic)}.]${targetText} ${message}`;
 }
 
 function serializeForm(form: EventForm) {
@@ -688,10 +872,19 @@ const COUNTDOWN: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadi
 const WARNINGS: React.CSSProperties = { border: "1px solid #fbbf24", borderRadius: 8, background: "#fffbeb", color: "#92400e", padding: 12, display: "grid", gap: 6, marginBottom: 12, fontSize: 13 };
 const HIGH_WARNING: React.CSSProperties = { border: "1px solid #f87171", borderRadius: 8, background: "#fef2f2", color: "#991b1b", padding: 12, display: "grid", gap: 6, marginBottom: 12, fontSize: 13 };
 const CONTROL_GRID: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, border: "1px solid #e5e7eb", borderRadius: 8, padding: 14 };
-const SEASON_WEEK: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, display: "flex", gap: 12, alignItems: "flex-start", background: "#fff" };
+const SEASON_WEEK: React.CSSProperties = { border: "1px solid #dbeafe", borderRadius: 8, padding: 12, display: "flex", gap: 12, alignItems: "flex-start", background: "linear-gradient(135deg, #ffffff 0%, #f8fbff 100%)" };
+const WEEK_RAIL: React.CSSProperties = { minWidth: 112, borderLeft: "4px solid #3B8BD4", paddingLeft: 10 };
 const EDIT_GRID: React.CSSProperties = { display: "grid", gridTemplateColumns: "minmax(180px, 1fr) 110px 110px", gap: 8 };
-const WORKOUT_EDIT_ROW: React.CSSProperties = { border: "1px solid #f3f4f6", borderRadius: 8, padding: 8, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" };
+const WORKOUT_EDIT_ROW: React.CSSProperties = { border: "1px solid #f3f4f6", borderRadius: 8, padding: 8, display: "flex", gap: 8, alignItems: "stretch", position: "relative" };
+const TYPE_STRIPE: React.CSSProperties = { width: 5, borderRadius: 6, flex: "0 0 5px" };
+const WORKOUT_FIELDS: React.CSSProperties = { flex: 1, display: "grid", gap: 8, minWidth: 0 };
+const WORKOUT_TOP_ROW: React.CSSProperties = { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" };
+const DISTANCE_BOX: React.CSSProperties = { display: "flex", alignItems: "center", gap: 4, border: "1px solid #d1d5db", borderRadius: 6, padding: "0 8px", background: "#fff", color: "#6b7280", fontSize: 12, fontWeight: 700 };
+const DISTANCE_INPUT: React.CSSProperties = { border: 0, width: 58, padding: "9px 0", fontSize: 14, outline: "none", background: "transparent" };
 const DISCUSS_BOX: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: 14, display: "grid", gap: 10 };
+const TOPIC_GRID: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))", gap: 8, marginBottom: 12 };
+const TOPIC_BTN: React.CSSProperties = { background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 8, padding: "10px 12px", cursor: "pointer", textAlign: "left", display: "grid", gap: 4 };
+const ACTIVE_TOPIC_BTN: React.CSSProperties = { ...TOPIC_BTN, background: "#f0fdfa", borderColor: "#14b8a6", color: "#0f766e" };
 const USER_MSG: React.CSSProperties = { justifySelf: "end", maxWidth: "85%", background: "#e0f2fe", color: "#075985", borderRadius: 8, padding: "8px 10px", fontSize: 13 };
 const PLAN_MSG: React.CSSProperties = { justifySelf: "start", maxWidth: "85%", background: "#f3f4f6", color: "#374151", borderRadius: 8, padding: "8px 10px", fontSize: 13 };
 const EMPTY_BOX: React.CSSProperties = { border: "1px dashed #d1d5db", borderRadius: 8, padding: 14, color: "#6b7280", fontSize: 13 };
