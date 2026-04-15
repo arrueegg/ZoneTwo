@@ -22,6 +22,8 @@ type PlanOptions = {
   emphasis: string;
 };
 
+type WorkspaceMode = "event-plan" | "season-plan" | "calendar" | "coach";
+
 const today = new Date().toISOString().slice(0, 10);
 
 const initialForm: EventForm = {
@@ -45,7 +47,8 @@ export function Preparation() {
     long_run_day: "Sun",
     emphasis: "balanced",
   });
-  const [activePanel, setActivePanel] = useState<"plan" | "calendar" | "discuss">("plan");
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("event-plan");
+  const [didChooseInitialMode, setDidChooseInitialMode] = useState(false);
   const [discussion, setDiscussion] = useState<Array<{ role: "user" | "plan"; text: string }>>([]);
   const [question, setQuestion] = useState("");
 
@@ -64,6 +67,12 @@ export function Preparation() {
       setSelectedEventId(events[0]?.id ?? null);
     }
   }, [events, selectedEventId]);
+
+  useEffect(() => {
+    if (didChooseInitialMode || events.length === 0) return;
+    setWorkspaceMode(events.length > 1 ? "season-plan" : "event-plan");
+    setDidChooseInitialMode(true);
+  }, [didChooseInitialMode, events.length]);
 
   const selectedEvent = events.find((event) => event.id === selectedEventId) ?? null;
 
@@ -176,6 +185,12 @@ export function Preparation() {
     ...event,
     daysLeft: daysUntil(event.event_date),
   })), [events]);
+  const highConflictCount = seasonPlan?.recommendations.filter((rec) => rec.severity === "high").length ?? 0;
+  const seasonStatus = highConflictCount > 0
+    ? "Needs attention"
+    : events.length > 1
+      ? "Aligned season"
+      : "Single target";
 
   if (!athleteId) {
     return (
@@ -201,8 +216,14 @@ export function Preparation() {
         )}
       </div>
 
-      <ModeSwitch activePanel={activePanel} onActivePanelChange={setActivePanel} />
-      <PlanSettings options={planOptions} onOptionsChange={setPlanOptions} />
+      <SeasonCommandBar
+        selectedEvent={selectedEvent}
+        status={seasonStatus}
+        warningCount={highConflictCount}
+        nextWorkout={plannedWorkouts[0] ?? null}
+        onReviewConflicts={() => setWorkspaceMode("season-plan")}
+      />
+      <ModeSwitch mode={workspaceMode} onModeChange={setWorkspaceMode} hasMultipleEvents={events.length > 1} />
 
       <div style={APP_LAYOUT}>
         <aside style={SIDEBAR}>
@@ -216,7 +237,7 @@ export function Preparation() {
                   key={event.id}
                   onClick={() => {
                     setSelectedEventId(event.id);
-                    setActivePanel("plan");
+                    setWorkspaceMode("event-plan");
                   }}
                   style={{
                     ...EVENT_ROW,
@@ -259,13 +280,23 @@ export function Preparation() {
 
         <section style={MAIN_STACK}>
           {!selectedEvent && <EmptyPlan />}
-          {selectedEvent && planLoading && <p style={MUTED}>Building plan...</p>}
-          {selectedEvent && plan && (
-            <PlanView
+          {workspaceMode === "season-plan" && (
+            <SeasonPlanWorkspace
+              seasonPlan={seasonPlan ?? null}
+              options={planOptions}
+              onOptionsChange={setPlanOptions}
+              onSaveSeasonPlan={(replace) => saveSeasonPlan.mutate(replace)}
+              savingSeasonPlan={saveSeasonPlan.isPending}
+            />
+          )}
+          {workspaceMode !== "season-plan" && selectedEvent && planLoading && <p style={MUTED}>Building plan...</p>}
+          {workspaceMode !== "season-plan" && selectedEvent && plan && (
+            <EventWorkspace
               event={selectedEvent}
               plan={plan}
-              seasonPlan={seasonPlan ?? null}
-              activePanel={activePanel}
+              mode={workspaceMode}
+              options={planOptions}
+              onOptionsChange={setPlanOptions}
               discussion={discussion}
               question={question}
               onQuestionChange={setQuestion}
@@ -278,8 +309,6 @@ export function Preparation() {
               plannedWorkouts={plannedWorkouts}
               onSavePlan={(replace) => savePlan.mutate(replace)}
               savingPlan={savePlan.isPending}
-              onSaveSeasonPlan={(replace) => saveSeasonPlan.mutate(replace)}
-              savingSeasonPlan={saveSeasonPlan.isPending}
               onUpdateWorkout={(id, patch) => updateWorkout.mutate({ id, patch })}
               updatingWorkout={updateWorkout.isPending}
               onDelete={() => deleteEvent.mutate(selectedEvent.id)}
@@ -292,14 +321,15 @@ export function Preparation() {
   );
 }
 
-function PlanView({
-  event, plan, seasonPlan, activePanel, discussion, question, onQuestionChange, onAsk, discussing,
-  plannedWorkouts, onSavePlan, savingPlan, onSaveSeasonPlan, savingSeasonPlan, onUpdateWorkout, updatingWorkout, onDelete, deleting,
+function EventWorkspace({
+  event, plan, mode, options, onOptionsChange, discussion, question, onQuestionChange, onAsk, discussing,
+  plannedWorkouts, onSavePlan, savingPlan, onUpdateWorkout, updatingWorkout, onDelete, deleting,
 }: {
   event: TrainingEvent;
   plan: PreparationPlan;
-  seasonPlan: SeasonPlan | null;
-  activePanel: "plan" | "calendar" | "discuss";
+  mode: WorkspaceMode;
+  options: PlanOptions;
+  onOptionsChange: (options: PlanOptions) => void;
   discussion: Array<{ role: "user" | "plan"; text: string }>;
   question: string;
   onQuestionChange: (value: string) => void;
@@ -308,8 +338,6 @@ function PlanView({
   plannedWorkouts: PlannedWorkout[];
   onSavePlan: (replace: boolean) => void;
   savingPlan: boolean;
-  onSaveSeasonPlan: (replace: boolean) => void;
-  savingSeasonPlan: boolean;
   onUpdateWorkout: (id: string, patch: Partial<PlannedWorkout>) => void;
   updatingWorkout: boolean;
   onDelete: () => void;
@@ -338,20 +366,12 @@ function PlanView({
         </div>
       )}
 
-      {seasonPlan && seasonPlan.events.length > 1 && (
-        <SeasonAlignment
-          seasonPlan={seasonPlan}
-          onSaveSeasonPlan={onSaveSeasonPlan}
-          savingSeasonPlan={savingSeasonPlan}
-        />
-      )}
-
-      {activePanel === "plan" && (
+      {mode === "event-plan" && (
         <div style={PANEL}>
           <div style={SECTION_HEADER}>
             <div>
-              <h2 style={SECTION_TITLE}>Selected Plan</h2>
-              <p style={{ ...MUTED, margin: 0 }}>Review the week structure before saving it to the calendar.</p>
+              <h2 style={SECTION_TITLE}>Event Plan</h2>
+              <p style={{ ...MUTED, margin: 0 }}>A focused plan for this target only.</p>
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button onClick={() => onSavePlan(false)} disabled={savingPlan} style={PRIMARY_BTN}>
@@ -362,6 +382,7 @@ function PlanView({
               </button>
             </div>
           </div>
+          <PlanSettings options={options} onOptionsChange={onOptionsChange} />
           <div style={{ display: "grid", gap: 10 }}>
             {plan.weeks.map((week) => (
               <article key={week.week} style={WEEK_ROW}>
@@ -391,7 +412,7 @@ function PlanView({
         </div>
       )}
 
-      {activePanel === "calendar" && (
+      {mode === "calendar" && (
         <div style={PANEL}>
           <div style={SECTION_HEADER}>
             <div>
@@ -407,9 +428,9 @@ function PlanView({
         </div>
       )}
 
-      {activePanel === "discuss" && (
+      {mode === "coach" && (
         <div style={PANEL}>
-          <h2 style={SECTION_TITLE}>Discuss</h2>
+          <h2 style={SECTION_TITLE}>Coach</h2>
           <div style={DISCUSS_BOX}>
             {discussion.length === 0 && (
               <p style={{ ...MUTED, margin: 0 }}>Ask why a week is structured this way, tell the plan you are tired, or ask how to fit training into fewer days.</p>
@@ -440,29 +461,60 @@ function PlanView({
   );
 }
 
-function ModeSwitch({ activePanel, onActivePanelChange }: {
-  activePanel: "plan" | "calendar" | "discuss";
-  onActivePanelChange: (panel: "plan" | "calendar" | "discuss") => void;
+function ModeSwitch({ mode, onModeChange, hasMultipleEvents }: {
+  mode: WorkspaceMode;
+  onModeChange: (mode: WorkspaceMode) => void;
+  hasMultipleEvents: boolean;
 }) {
+  const items: Array<{ mode: WorkspaceMode; title: string; description: string }> = [
+    { mode: "event-plan", title: "Event Plan", description: "Focus one target" },
+    { mode: "season-plan", title: "Season Plan", description: "One plan across targets" },
+    { mode: "calendar", title: "Calendar", description: "Edit saved workouts" },
+    { mode: "coach", title: "Coach", description: "Ask and adjust" },
+  ];
+
   return (
     <div style={MODE_SWITCH}>
-      {(["plan", "calendar", "discuss"] as const).map((panel) => (
+      {items.map((item) => (
         <button
-          key={panel}
-          onClick={() => onActivePanelChange(panel)}
-          style={activePanel === panel ? ACTIVE_MODE_BTN : MODE_BTN}
+          key={item.mode}
+          onClick={() => onModeChange(item.mode)}
+          style={mode === item.mode ? ACTIVE_MODE_BTN : MODE_BTN}
         >
-          <strong>{panel === "plan" ? "Plan" : panel === "calendar" ? "Calendar" : "Discuss"}</strong>
-          <span>
-            {panel === "plan"
-              ? "Generate and align training"
-              : panel === "calendar"
-                ? "Edit saved workouts"
-                : "Ask and adjust"}
-          </span>
+          <strong>{item.title}</strong>
+          <span>{item.mode === "season-plan" && !hasMultipleEvents ? "Optional with one target" : item.description}</span>
         </button>
       ))}
     </div>
+  );
+}
+
+function SeasonCommandBar({
+  selectedEvent, status, warningCount, nextWorkout, onReviewConflicts,
+}: {
+  selectedEvent: TrainingEvent | null;
+  status: string;
+  warningCount: number;
+  nextWorkout: PlannedWorkout | null;
+  onReviewConflicts: () => void;
+}) {
+  return (
+    <section style={COMMAND_BAR}>
+      <div>
+        <span style={{ fontSize: 11, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.04em" }}>Current target</span>
+        <strong style={{ display: "block", fontSize: 18 }}>{selectedEvent?.name ?? "No target selected"}</strong>
+        {selectedEvent && (
+          <span style={MUTED}>
+            {formatDate(selectedEvent.event_date)} · {daysUntil(selectedEvent.event_date)} days · {selectedEvent.priority} target
+          </span>
+        )}
+      </div>
+      <div style={COMMAND_META}>
+        <span style={warningCount > 0 ? DANGER_BADGE : GOOD_BADGE}>{status}</span>
+        {nextWorkout && <span style={BADGE}>Next: {formatDate(nextWorkout.planned_date)} · {nextWorkout.title}</span>}
+        {warningCount > 0 && <button onClick={onReviewConflicts} style={GHOST_BTN}>Review conflicts</button>}
+      </div>
+    </section>
   );
 }
 
@@ -474,7 +526,7 @@ function PlanSettings({ options, onOptionsChange }: {
     <section style={PLAN_SETTINGS}>
       <div>
         <h2 style={SECTION_TITLE}>Plan Settings</h2>
-        <p style={{ ...MUTED, margin: 0 }}>These apply to the selected plan and the aligned season.</p>
+        <p style={{ ...MUTED, margin: 0 }}>Adjust how the plan is generated.</p>
       </div>
       <div style={CONTROL_GRID}>
         <label style={LABEL}>
@@ -506,18 +558,43 @@ function PlanSettings({ options, onOptionsChange }: {
   );
 }
 
-function SeasonAlignment({
-  seasonPlan, onSaveSeasonPlan, savingSeasonPlan,
+function SeasonPlanWorkspace({
+  seasonPlan, options, onOptionsChange, onSaveSeasonPlan, savingSeasonPlan,
 }: {
-  seasonPlan: SeasonPlan;
+  seasonPlan: SeasonPlan | null;
+  options: PlanOptions;
+  onOptionsChange: (options: PlanOptions) => void;
   onSaveSeasonPlan: (replace: boolean) => void;
   savingSeasonPlan: boolean;
 }) {
+  if (!seasonPlan || seasonPlan.weeks.length === 0) {
+    return (
+      <div style={PANEL}>
+        <h2 style={SECTION_TITLE}>Season Plan</h2>
+        <p style={MUTED}>Add an upcoming target to build a season plan.</p>
+      </div>
+    );
+  }
+
   return (
-    <section style={{ marginTop: 28 }}>
-      <h2 style={SECTION_TITLE}>Season Alignment</h2>
+    <section style={PANEL}>
+      <div style={SECTION_HEADER}>
+        <div>
+          <h2 style={SECTION_TITLE}>Season Plan</h2>
+          <p style={{ ...MUTED, margin: 0 }}>One training plan per week across all upcoming events.</p>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button onClick={() => onSaveSeasonPlan(false)} disabled={savingSeasonPlan} style={PRIMARY_BTN}>
+            Save Aligned Season
+          </button>
+          <button onClick={() => onSaveSeasonPlan(true)} disabled={savingSeasonPlan} style={GHOST_BTN}>
+            {savingSeasonPlan ? "Saving..." : "Replace Future Calendar"}
+          </button>
+        </div>
+      </div>
+      <PlanSettings options={options} onOptionsChange={onOptionsChange} />
       <p style={{ ...MUTED, marginTop: 0 }}>
-        One week can only have one plan. This aligned view chooses the primary event for each week and flags combinations that compete.
+        Each week is assigned one primary target. Nearby events remain visible as supporting context.
       </p>
       {seasonPlan.recommendations.length > 0 && (
         <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
@@ -529,16 +606,8 @@ function SeasonAlignment({
           ))}
         </div>
       )}
-      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-        <button onClick={() => onSaveSeasonPlan(false)} disabled={savingSeasonPlan} style={PRIMARY_BTN}>
-          Save Aligned Season
-        </button>
-        <button onClick={() => onSaveSeasonPlan(true)} disabled={savingSeasonPlan} style={GHOST_BTN}>
-          {savingSeasonPlan ? "Saving..." : "Replace Calendar with Season"}
-        </button>
-      </div>
       <div style={{ display: "grid", gap: 8 }}>
-        {seasonPlan.weeks.slice(0, 12).map((week) => (
+        {seasonPlan.weeks.map((week) => (
           <div key={week.week} style={SEASON_WEEK}>
             <div>
               <strong>Week {week.week}</strong>
@@ -739,7 +808,9 @@ const APP_LAYOUT: React.CSSProperties = { display: "grid", gridTemplateColumns: 
 const SIDEBAR: React.CSSProperties = { display: "grid", gap: 12, alignSelf: "start" };
 const MAIN_STACK: React.CSSProperties = { display: "grid", gap: 14, minWidth: 0 };
 const PANEL: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: 14, background: "#fff" };
-const PLAN_SETTINGS: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: 14, marginBottom: 18, display: "grid", gap: 12, background: "#fff" };
+const COMMAND_BAR: React.CSSProperties = { border: "1px solid #dbeafe", borderRadius: 8, padding: 14, marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, flexWrap: "wrap", background: "#f8fbff" };
+const COMMAND_META: React.CSSProperties = { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" };
+const PLAN_SETTINGS: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: 14, marginBottom: 14, display: "grid", gap: 12, background: "#fff" };
 const MODE_SWITCH: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 190px), 1fr))", gap: 10, marginBottom: 14 };
 const MODE_BTN: React.CSSProperties = { background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 8, padding: "12px 14px", cursor: "pointer", textAlign: "left", display: "grid", gap: 3 };
 const ACTIVE_MODE_BTN: React.CSSProperties = { ...MODE_BTN, background: "#e8f3ff", color: "#1f5f99", borderColor: "#3B8BD4" };
@@ -753,6 +824,8 @@ const PRIMARY_BTN: React.CSSProperties = { background: "#3B8BD4", color: "#fff",
 const GHOST_BTN: React.CSSProperties = { background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 6, padding: "8px 12px", cursor: "pointer" };
 const EVENT_ROW: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px", textAlign: "left", cursor: "pointer", display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" };
 const BADGE: React.CSSProperties = { border: "1px solid #d1d5db", borderRadius: 6, padding: "3px 7px", color: "#374151", fontSize: 12, background: "#fff", whiteSpace: "nowrap" };
+const GOOD_BADGE: React.CSSProperties = { border: "1px solid #86efac", borderRadius: 6, padding: "4px 8px", color: "#166534", fontSize: 12, background: "#f0fdf4", fontWeight: 700, whiteSpace: "nowrap" };
+const DANGER_BADGE: React.CSSProperties = { border: "1px solid #fca5a5", borderRadius: 6, padding: "4px 8px", color: "#991b1b", fontSize: 12, background: "#fef2f2", fontWeight: 700, whiteSpace: "nowrap" };
 const COUNTDOWN: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 14px", display: "flex", flexDirection: "column", gap: 3, minWidth: 110 };
 const HEADER_BAND: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: 18, display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 16 };
 const METRIC_GRID: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 };

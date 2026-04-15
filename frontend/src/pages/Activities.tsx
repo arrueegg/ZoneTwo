@@ -180,7 +180,7 @@ function ActivityDetail({ activity: a }: { activity: Activity }) {
           />
         )}
         {a.elevation_m != null && <DetailStat label="Elevation" value={`${Math.round(a.elevation_m)} m`} />}
-        {a.normalized_power != null && <DetailStat label="NP" value={`${Math.round(a.normalized_power)} W`} />}
+        {isCycling && a.normalized_power != null && <DetailStat label="NP" value={`${Math.round(a.normalized_power)} W`} />}
         {a.vo2max_estimated != null && <DetailStat label="VO₂max est." value={a.vo2max_estimated.toFixed(1)} />}
         {a.hrv_rmssd != null && <DetailStat label="HRV (post)" value={`${Math.round(a.hrv_rmssd)} ms`} />}
         {a.body_battery != null && <DetailStat label="Body Battery" value={`${Math.round(a.body_battery)}`} />}

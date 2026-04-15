@@ -368,6 +368,7 @@ const TD: React.CSSProperties = { padding: "8px 10px", whiteSpace: "nowrap" };
 
 function StatRow({ activity: a }: { activity: Activity }) {
   const isRun = ["run", "trail_run", "walk", "hiking"].includes(a.sport_type);
+  const isCycling = ["ride", "virtual_ride"].includes(a.sport_type);
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 24 }}>
       {a.distance_m != null     && <Tile label="Distance"   value={fmtDist(a.distance_m)} />}
@@ -378,7 +379,7 @@ function StatRow({ activity: a }: { activity: Activity }) {
       {a.elevation_m != null    && <Tile label="Elevation"  value={`${Math.round(a.elevation_m)} m`} />}
       {a.avg_cadence != null    && <Tile label="Cadence"    value={`${Math.round(a.avg_cadence)} spm`} />}
       {a.tss != null            && <Tile label="TSS"        value={a.tss.toFixed(0)} bold />}
-      {a.normalized_power != null && <Tile label="NP"       value={`${Math.round(a.normalized_power)} W`} />}
+      {isCycling && a.normalized_power != null && <Tile label="NP" value={`${Math.round(a.normalized_power)} W`} />}
       {a.vo2max_estimated != null && <Tile label="VO₂max est." value={a.vo2max_estimated.toFixed(1)} />}
     </div>
   );
