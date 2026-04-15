@@ -88,7 +88,7 @@ npm run build   # also type-checks frontend
 
 **DB migrations**: No Alembic. New columns require `ALTER TABLE ... ADD COLUMN ...` run manually against `backend/training_app.db`. Always add a migration block alongside model changes.
 
-**AI weekly debrief**: cached 7 days in `athletes.ai_summary`. `POST /recommendations/weekly-summary?force=true` bypasses cache. Output is structured JSON with `week_summary`, `training_recommendation`, `recovery_insight` sections. Multi-strategy fallback parser in `services/recommendations.py:_extract_json` handles non-compliant LLM output.
+**AI weekly debrief**: cached 7 days in `athletes.ai_summary`. `POST /recommendations/weekly-summary?force=true` bypasses cache. Output is structured JSON with `week_summary`, `training_recommendation`, `recovery_insight` sections. The prompt must prioritize interpretation, judgement calls, and concrete recommendations over repeating metric values. Multi-strategy fallback parser in `services/recommendations.py:_extract_json` handles non-compliant LLM output.
 
 **AI coach chat**: `POST /coach/chat` — body `{athlete_id, message, history}`. `services/coach.py:build_system_prompt` fetches 14 days of daily metrics + 30 days of activities + athlete profile and serialises to a text block for the system prompt. In-memory rate limiter (20 msg/day per athlete, resets on server restart). History capped to last 10 turns before sending to Groq.
 
