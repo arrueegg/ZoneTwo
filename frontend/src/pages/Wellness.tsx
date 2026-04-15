@@ -69,7 +69,7 @@ export function Wellness() {
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ fontSize: 12, color: "#6b7280" }}>Endurance Score</span>
                   <span style={{ fontWeight: 700, color: "#10b981", fontSize: 16 }}>
-                    {summary.endurance_score.toFixed(1)}
+                    {Math.round(summary.endurance_score)}
                   </span>
                 </div>
               )}

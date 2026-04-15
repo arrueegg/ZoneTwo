@@ -4,8 +4,10 @@ import { BrowserRouter, Routes, Route, NavLink } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Dashboard } from "./pages/Dashboard";
 import { Activities } from "./pages/Activities";
+import { ActivityDetail } from "./pages/ActivityDetail";
 import { Wellness } from "./pages/Wellness";
 import { Settings } from "./pages/Settings";
+import { Coach } from "./pages/Coach";
 import { useAthlete } from "./hooks/useAthlete";
 
 const queryClient = new QueryClient({
@@ -51,6 +53,7 @@ function App() {
           <NavLink to="/" end style={navStyle}>Dashboard</NavLink>
           <NavLink to="/activities" style={navStyle}>Activities</NavLink>
           <NavLink to="/wellness" style={navStyle}>Wellness</NavLink>
+          <NavLink to="/coach" style={navStyle}>Coach</NavLink>
           <NavLink to="/settings" style={navStyle}>Settings</NavLink>
           {athlete.name && (
             <span style={{ marginLeft: "auto", color: "#6b7280" }}>
@@ -61,7 +64,9 @@ function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/activities" element={<Activities />} />
+          <Route path="/activities/:activityId" element={<ActivityDetail />} />
           <Route path="/wellness" element={<Wellness />} />
+          <Route path="/coach" element={<Coach />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </BrowserRouter>

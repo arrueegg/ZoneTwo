@@ -277,6 +277,112 @@ async def fetch_hrv(
     return results
 
 
+async def fetch_activity_track(
+    email: str, password: str, garmin_activity_id: str | int, client: Garmin | None = None,
+) -> dict[str, Any] | None:
+    """
+    Download the GPX file for one activity and parse it into a structured dict.
+    Returns {"points": [...], "splits": [...]} or None on failure.
+
+    Points schema: {lat, lon, ele, time, hr, cadence}
+    Splits schema: [{distance_m, duration_sec, avg_hr, avg_pace_sec_km, elevation_gain_m, ...}]
+    """
+    import gpxpy
+    import gpxpy.gpx
+
+    if client is None:
+        client = await get_client(email, password)
+
+    garmin_id = str(garmin_activity_id).removeprefix("garmin_")
+
+    # Download GPX
+    try:
+        gpx_bytes = await asyncio.to_thread(
+            _with_retry,
+            client.download_activity,
+            garmin_id,
+            Garmin.ActivityDownloadFormat.GPX,
+        )
+    except Exception as exc:
+        print(f"[garmin] GPX download failed for {garmin_id}: {exc}")
+        return None
+
+    # Parse GPX
+    try:
+        gpx = gpxpy.parse(gpx_bytes.decode("utf-8", errors="replace"))
+    except Exception as exc:
+        print(f"[garmin] GPX parse failed for {garmin_id}: {exc}")
+        return None
+
+    points: list[dict[str, Any]] = []
+    prev_point = None
+    prev_time = None
+
+    for track in gpx.tracks:
+        for segment in track.segments:
+            for pt in segment.points:
+                p: dict[str, Any] = {
+                    "lat": round(pt.latitude, 6),
+                    "lon": round(pt.longitude, 6),
+                }
+                if pt.elevation is not None:
+                    p["ele"] = round(pt.elevation, 1)
+                if pt.time is not None:
+                    p["time"] = pt.time.isoformat()
+
+                # Garmin GPX extensions: HR, cadence, temperature
+                if pt.extensions:
+                    for ext in pt.extensions:
+                        # Handle both namespaced and plain extension tags
+                        tag = ext.tag.split("}")[-1] if "}" in ext.tag else ext.tag
+                        if tag in ("TrackPointExtension", "tpx"):
+                            for child in ext:
+                                child_tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+                                if child_tag in ("hr", "HeartRateBpm") and child.text:
+                                    try:
+                                        p["hr"] = int(child.text)
+                                    except ValueError:
+                                        pass
+                                elif child_tag == "cad" and child.text:
+                                    try:
+                                        p["cadence"] = int(child.text)
+                                    except ValueError:
+                                        pass
+
+                # Derive instantaneous pace from distance between consecutive points
+                if prev_point is not None and prev_time is not None and pt.time is not None:
+                    dist = pt.distance_2d(prev_point)
+                    dt = (pt.time - prev_time).total_seconds()
+                    if dist and dist > 0 and dt > 0:
+                        pace = dt / (dist / 1000)  # sec/km
+                        if 60 < pace < 1800:       # sanity check: 1–30 min/km
+                            p["pace_sec_km"] = round(pace)
+
+                prev_point = pt
+                prev_time = pt.time
+                points.append(p)
+
+    # Fetch splits separately
+    splits: list[dict[str, Any]] = []
+    try:
+        raw_splits = await asyncio.to_thread(_with_retry, client.get_activity_splits, garmin_id)
+        for s in (raw_splits.get("splits") or raw_splits.get("lapDTOs") or []):
+            split: dict[str, Any] = {}
+            split["distance_m"]       = s.get("distance") or s.get("distanceInMeters")
+            split["duration_sec"]     = s.get("duration") or s.get("elapsedDuration")
+            split["avg_hr"]           = s.get("averageHR") or s.get("averageHeartRate")
+            speed = s.get("averageSpeed") or s.get("averageMovingSpeed")
+            split["avg_pace_sec_km"]  = round(1000 / speed) if speed and speed > 0 else None
+            split["elevation_gain_m"] = s.get("elevationGain")
+            split["avg_cadence"]      = s.get("averageRunCadence") or s.get("averageCadence")
+            splits.append({k: v for k, v in split.items() if v is not None})
+    except Exception as exc:
+        print(f"[garmin] Splits fetch failed for {garmin_id}: {exc}")
+
+    print(f"[garmin] Track for {garmin_id}: {len(points)} points, {len(splits)} splits")
+    return {"points": points, "splits": splits}
+
+
 async def fetch_activities(
     email: str, password: str, start: date, end: date, client: Garmin | None = None,
 ) -> list[dict[str, Any]]:

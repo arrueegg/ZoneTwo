@@ -133,7 +133,7 @@ export function WellnessCharts({ data }: Props) {
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="date" tick={tick} tickFormatter={fmt} />
               <YAxis tick={tick} domain={["auto", "auto"]} />
-              <Tooltip formatter={(v: number) => [`${v.toFixed(1)}`]} labelFormatter={fmt} />
+              <Tooltip formatter={(v: number) => [`${Math.round(v)}`]} labelFormatter={fmt} />
               <Area type="monotone" dataKey="endurance_score" stroke="#10b981" fill="url(#enduranceGrad)"
                 name="Endurance score" strokeWidth={2} dot={false} connectNulls />
             </AreaChart>

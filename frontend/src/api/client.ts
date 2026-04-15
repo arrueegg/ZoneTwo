@@ -42,6 +42,30 @@ export interface Activity {
   body_battery: number | null;
 }
 
+export interface TrackPoint {
+  lat: number;
+  lon: number;
+  ele?: number;
+  time?: string;
+  hr?: number;
+  cadence?: number;
+  pace_sec_km?: number;
+}
+
+export interface Split {
+  distance_m?: number;
+  duration_sec?: number;
+  avg_hr?: number;
+  avg_pace_sec_km?: number;
+  elevation_gain_m?: number;
+  avg_cadence?: number;
+}
+
+export interface ActivityTrack {
+  points: TrackPoint[];
+  splits: Split[];
+}
+
 export interface Insight {
   type: "warning" | "positive" | "info";
   title: string;

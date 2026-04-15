@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from models.activity import Activity
+from models.athlete import Athlete
+from models.track import ActivityTrack
 
 router = APIRouter(prefix="/activities", tags=["activities"])
 
@@ -48,6 +50,61 @@ async def get_activity(
     if not activity:
         raise HTTPException(status_code=404, detail="Activity not found")
     return _serialize(activity)
+
+
+@router.get("/{activity_id}/track")
+async def get_activity_track(
+    activity_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """
+    Return GPS track + splits for one activity.
+    Downloads and caches on first request; subsequent requests are instant.
+    Only works for Garmin activities (id starts with 'garmin_').
+    """
+    # Return cached track if available
+    track = await db.get(ActivityTrack, activity_id)
+    if track:
+        return {"points": track.points, "splits": track.splits or []}
+
+    # Must be a Garmin activity to download
+    if not activity_id.startswith("garmin_"):
+        raise HTTPException(status_code=404, detail="Track data only available for Garmin activities")
+
+    activity = await db.get(Activity, activity_id)
+    if not activity:
+        raise HTTPException(status_code=404, detail="Activity not found")
+
+    # Look up athlete credentials
+    athlete = await db.get(Athlete, activity.athlete_id)
+    if not athlete or not athlete.garmin_email or not athlete.garmin_password_encrypted:
+        raise HTTPException(status_code=404, detail="Garmin credentials not available")
+
+    # Download and parse
+    from services.crypto import decrypt
+    from integrations.garmin_unofficial import get_client, fetch_activity_track
+
+    client = await get_client(athlete.garmin_email, decrypt(athlete.garmin_password_encrypted))
+    result = await fetch_activity_track(
+        athlete.garmin_email,
+        decrypt(athlete.garmin_password_encrypted),
+        activity_id,
+        client=client,
+    )
+    if not result or not result.get("points"):
+        raise HTTPException(status_code=404, detail="No track data available for this activity")
+
+    # Cache it
+    track = ActivityTrack(
+        activity_id=activity_id,
+        downloaded_at=datetime.now(timezone.utc),
+        points=result["points"],
+        splits=result.get("splits"),
+    )
+    db.add(track)
+    await db.commit()
+
+    return {"points": track.points, "splits": track.splits or []}
 
 
 def _serialize(a: Activity) -> dict[str, Any]:

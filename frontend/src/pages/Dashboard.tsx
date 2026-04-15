@@ -100,7 +100,7 @@ export function Dashboard() {
               {summary.endurance_score != null && (
                 <TileCard label="Endurance Score">
                   <span style={{ fontSize: 22, fontWeight: 700, color: "#10b981" }}>
-                    {summary.endurance_score.toFixed(1)}
+                    {Math.round(summary.endurance_score)}
                   </span>
                 </TileCard>
               )}

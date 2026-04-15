@@ -40,8 +40,8 @@ export function AiWeeklySummary({ athleteId }: Props) {
     enabled: Boolean(athleteId),
   });
 
-  const { mutate: generate, isPending } = useMutation({
-    mutationFn: async (force = false) => {
+  const { mutate: generate, isPending } = useMutation<SummaryResponse, unknown, boolean>({
+    mutationFn: async (force: boolean) => {
       const { data } = await api.post("/recommendations/weekly-summary", null, {
         params: { athlete_id: athleteId, force },
       });

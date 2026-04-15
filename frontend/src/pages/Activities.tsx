@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useActivities } from "../hooks/useActivities";
 import { useAthleteContext } from "../main";
 import type { Activity } from "../api/client";
@@ -15,7 +16,7 @@ function fmtPace(sec_km: number | null): string {
 
 function fmtDist(m: number | null): string {
   if (!m) return "—";
-  return `${(m / 1000).toFixed(2)} km`;
+  return `${(m / 1000).toFixed(1)} km`;
 }
 
 function fmtDuration(sec: number | null): string {
@@ -180,7 +181,7 @@ function ActivityDetail({ activity: a }: { activity: Activity }) {
         {a.elevation_m != null && <DetailStat label="Elevation" value={`${Math.round(a.elevation_m)} m`} />}
         {a.normalized_power != null && <DetailStat label="NP" value={`${Math.round(a.normalized_power)} W`} />}
         {a.vo2max_estimated != null && <DetailStat label="VO₂max est." value={a.vo2max_estimated.toFixed(1)} />}
-        {a.hrv_rmssd != null && <DetailStat label="HRV (post)" value={`${a.hrv_rmssd.toFixed(1)} ms`} />}
+        {a.hrv_rmssd != null && <DetailStat label="HRV (post)" value={`${Math.round(a.hrv_rmssd)} ms`} />}
         {a.body_battery != null && <DetailStat label="Body Battery" value={`${Math.round(a.body_battery)}`} />}
       </div>
       <HrZoneBreakdown zones={a.hr_zones} />
@@ -266,42 +267,48 @@ function WeekGroup({
       {activities.map((a) => (
         <div key={a.id}>
           <div
-            onClick={() => onToggle(a.id)}
             style={{
               display: "grid",
-              gridTemplateColumns: "110px 110px 80px 60px 60px 80px 90px 60px 50px 24px",
+              gridTemplateColumns: "110px 110px 80px 60px 60px 80px 90px 60px 50px 24px 28px",
               alignItems: "center",
               padding: "9px 0",
               borderBottom: "1px solid #f3f4f6",
-              cursor: "pointer",
               fontSize: 13,
               background: expandedId === a.id ? "#f0f9ff" : "transparent",
               transition: "background 0.1s",
             }}
           >
-            <span style={{ color: "#374151" }}>{fmtDate(a.start_time)}</span>
-            <span>
+            <span style={{ color: "#374151", cursor: "pointer" }} onClick={() => onToggle(a.id)}>{fmtDate(a.start_time)}</span>
+            <span style={{ cursor: "pointer" }} onClick={() => onToggle(a.id)}>
               <span style={{ marginRight: 4 }}>{SPORT_ICON[a.sport_type] ?? "⚡"}</span>
               {SPORT_LABEL[a.sport_type] ?? a.sport_type}
             </span>
-            <span>{fmtDist(a.distance_m)}</span>
-            <span>{fmtDuration(a.duration_sec)}</span>
-            <span>{a.avg_hr != null ? `${Math.round(a.avg_hr)} bpm` : "—"}</span>
-            <span>
+            <span style={{ cursor: "pointer" }} onClick={() => onToggle(a.id)}>{fmtDist(a.distance_m)}</span>
+            <span style={{ cursor: "pointer" }} onClick={() => onToggle(a.id)}>{fmtDuration(a.duration_sec)}</span>
+            <span style={{ cursor: "pointer" }} onClick={() => onToggle(a.id)}>{a.avg_hr != null ? `${Math.round(a.avg_hr)} bpm` : "—"}</span>
+            <span style={{ cursor: "pointer" }} onClick={() => onToggle(a.id)}>
               {["run", "trail_run", "walk", "hiking"].includes(a.sport_type)
                 ? fmtPace(a.avg_pace_sec_km)
                 : "—"}
             </span>
-            <div style={{ display: "flex", alignItems: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", cursor: "pointer" }} onClick={() => onToggle(a.id)}>
               <HrZoneBar zones={a.hr_zones} />
             </div>
-            <span>{a.elevation_m != null ? `${Math.round(a.elevation_m)}m` : "—"}</span>
-            <span style={{ fontWeight: a.tss != null ? 600 : 400, color: a.tss != null ? "#374151" : "#9ca3af" }}>
+            <span style={{ cursor: "pointer" }} onClick={() => onToggle(a.id)}>{a.elevation_m != null ? `${Math.round(a.elevation_m)}m` : "—"}</span>
+            <span style={{ cursor: "pointer", fontWeight: a.tss != null ? 600 : 400, color: a.tss != null ? "#374151" : "#9ca3af" }} onClick={() => onToggle(a.id)}>
               {a.tss != null ? a.tss.toFixed(0) : "—"}
             </span>
-            <span style={{ color: "#9ca3af", fontSize: 11, userSelect: "none" }}>
+            <span style={{ color: "#9ca3af", fontSize: 11, userSelect: "none", cursor: "pointer" }} onClick={() => onToggle(a.id)}>
               {expandedId === a.id ? "▲" : "▼"}
             </span>
+            <Link
+              to={`/activities/${a.id}`}
+              title="View full detail"
+              onClick={(e) => e.stopPropagation()}
+              style={{ color: "#9ca3af", fontSize: 14, textDecoration: "none", display: "flex", alignItems: "center" }}
+            >
+              ↗
+            </Link>
           </div>
 
           {expandedId === a.id && <ActivityDetail activity={a} />}
@@ -373,7 +380,7 @@ export function Activities() {
       {(isLoading || activities.length > 0) && (
         <div style={{
           display: "grid",
-          gridTemplateColumns: "110px 110px 80px 60px 60px 80px 90px 60px 50px 24px",
+          gridTemplateColumns: "110px 110px 80px 60px 60px 80px 90px 60px 50px 24px 28px",
           padding: "0 0 6px",
           fontSize: 11, fontWeight: 600, color: "#9ca3af",
           textTransform: "uppercase", letterSpacing: "0.04em",
@@ -388,6 +395,7 @@ export function Activities() {
           <span>HR Zones</span>
           <span>Elev.</span>
           <span>TSS</span>
+          <span />
           <span />
         </div>
       )}

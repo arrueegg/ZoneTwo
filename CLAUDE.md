@@ -56,8 +56,10 @@ npm run build   # also type-checks frontend
 | Page | Shows |
 |------|-------|
 | Dashboard | Today: recovery metrics + training status badge + readiness + endurance score; PMC (CTL/ATL/TSB + goal line); Performance tiles (race predictions, VO2max, fitness age); rule-based coaching insights; AI weekly debrief (3 cards); CTL/ATL/TSB/TSS glossary |
-| Activities | Weekly-grouped list with per-week totals; expandable rows: training effect badges (0–5 color scale), cadence, max HR, elevation, VO2max estimate, HR zone breakdown (minutes + %) |
+| Activities | Weekly-grouped list with per-week totals; expandable rows: training effect badges (0–5 color scale), cadence, max HR, elevation, VO2max estimate, HR zone breakdown (minutes + %); `↗` link on each row opens full detail page |
+| Activity Detail | `/activities/:id` — stat tiles, training effect tile, GPS map (Leaflet/OpenStreetMap), elevation/HR/pace/cadence intraday charts (vs distance), splits table. Track downloaded on-demand from Garmin GPX and cached in `activity_tracks` table. |
 | Wellness | Today: all recovery metrics + sleep stage bar + both readiness scores + training status + endurance score; Readiness chart (computed vs. Garmin); Sleep stages stacked bar (60 days); Body battery area; HRV + 7-day avg; Resting HR; Steps; Stress; SpO₂ + respiration; Endurance score area; HR zone distribution (12 weeks) |
+| Coach | Chat interface with data-grounded AI coach (Groq/Llama 3). Context window: last 14 days of wellness + 30 days of activities + full athlete profile. Rate-limited to 20 messages/day. Quick-start suggestion chips on empty state. |
 | Settings | Garmin connect/disconnect; Sync Now; Training profile (threshold HR, max HR, target CTL, goal, target race) |
 
 ### Key architecture decisions
@@ -75,53 +77,23 @@ npm run build   # also type-checks frontend
 
 **AI weekly debrief**: cached 7 days in `athletes.ai_summary`. `POST /recommendations/weekly-summary?force=true` bypasses cache. Output is structured JSON with `week_summary`, `training_recommendation`, `recovery_insight` sections. Multi-strategy fallback parser in `services/recommendations.py:_extract_json` handles non-compliant LLM output.
 
+**AI coach chat**: `POST /coach/chat` — body `{athlete_id, message, history}`. `services/coach.py:build_system_prompt` fetches 14 days of daily metrics + 30 days of activities + athlete profile and serialises to a text block for the system prompt. In-memory rate limiter (20 msg/day per athlete, resets on server restart). History capped to last 10 turns before sending to Groq.
+
+**Activity track (GPS)**: `GET /activities/{id}/track` downloads a GPX from Garmin on first request, parses HR/cadence from TrackPointExtension namespace using `gpxpy`, derives pace from consecutive point distances, fetches splits via `get_activity_splits`, and caches everything in the `activity_tracks` table. The download only runs for `garmin_*` activity IDs. Frontend lazy-loads Leaflet to avoid bundle bloat.
+
 **Frontend type safety**: `WellnessPoint` in `frontend/src/hooks/useWellness.ts` and `MetricsSummary` in `frontend/src/api/client.ts` must stay in sync with the backend `/metrics/wellness` and `/metrics/summary` responses. These drift silently — check both when adding fields.
 
 ## Roadmap
 
-The following features are planned but not yet implemented. Work on them in this priority order unless instructed otherwise.
+Work on items in priority order unless instructed otherwise.
 
-### 1. Detailed activity view with GPS + intraday charts
+### ✅ 1. Detailed activity view with GPS + intraday charts — DONE
 
-**Goal**: Clicking an activity opens a full detail page (or expanded panel) with:
-- **Map**: render the GPS track from the FIT/GPX file (leaflet.js or similar)
-- **Intraday charts**: pace, HR, elevation, cadence, and power (if available) plotted over distance or time
-- **Km/mile splits table**: pace, HR, elevation gain per split
-- **Lap data**: if the watch recorded laps
+`/activities/:id` page with GPS map, elevation/HR/pace/cadence charts, splits table. Backend caches GPX track in `activity_tracks` table. Activity rows in the list have an `↗` link.
 
-**Implementation notes**:
-- Garmin FIT files can be downloaded via `client.download_activity(activity_id, dl_fmt=DownloadFormat.ORIGINAL)` — returns a ZIP containing the `.fit` file
-- Parse FIT files with the `fitparse` Python library (`pip install fitparse`)
-- Store GPS track as a JSON array of `{lat, lon, ele, time, hr, pace, cadence}` points, or as a separate `activity_laps` table
-- The `raw_data` column on `Activity` already stores the summary; GPS data needs a new storage strategy given size (~1–5 MB per activity FIT file)
-- Consider storing GPS tracks in a separate `activity_tracks` table with `(activity_id, points JSON)` rather than bloating the main activities table
-- Add a `GET /activities/{id}/track` endpoint
-- Frontend: use Leaflet (lightweight) for the map; Recharts for the intraday charts; these should lazy-load since most list views don't need them
+### ✅ 2. AI Coach chat tab — DONE
 
-### 2. AI Coach chat tab
-
-**Goal**: A dedicated chat interface where the athlete can ask free-form questions and get data-grounded answers from an AI coach.
-
-**Examples of supported queries**:
-- "How was my training load this week compared to last week?"
-- "Why am I feeling tired? What does my HRV trend say?"
-- "Should I run tomorrow given today's readiness score?"
-- "What's my best 5k time and when was it?" (needs personal records)
-- "Plan my next 7 days given my CTL of 65 and an upcoming race in 3 weeks"
-
-**Implementation notes**:
-- New page: `frontend/src/pages/Coach.tsx` with a chat UI (message list + input box)
-- New backend router: `routers/coach.py` with `POST /coach/chat`
-- Request body: `{ athlete_id, message, history: [{role, content}] }` — pass conversation history so the model has context
-- The backend fetches relevant data from the DB before calling the LLM:
-  - Last 14 days of `daily_metrics` (HRV, readiness, TSB, sleep, etc.)
-  - Last 30 days of activities (sport, distance, TSS, training effect)
-  - Athlete profile (threshold HR, VO2max, race predictions, target CTL, goal)
-  - Current CTL/ATL/TSB from latest `daily_metrics`
-- All fetched data is serialised into a system prompt: "You are a personal endurance coach. Here is the athlete's data: ..."
-- Use Groq (`llama-3.3-70b-versatile`) with streaming response if possible, otherwise standard completion
-- For action-taking (e.g., "plan my week"): the model returns a structured JSON block that the frontend can render as a training plan table — do not write to the DB without explicit user confirmation
-- Rate-limit to avoid burning free-tier quota: max 20 messages per athlete per day
+`/coach` page with chat UI. `POST /coach/chat` fetches 14-day wellness + 30-day activities + athlete profile and builds a Groq system prompt. In-memory rate limiter (20 msg/day). Quick-start suggestions on empty state.
 
 ### 3. Performance trends page
 

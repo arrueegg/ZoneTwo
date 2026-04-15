@@ -11,3 +11,4 @@ python-jose[cryptography]==3.3.0
 python-dotenv==1.0.1
 numpy==1.26.4
 garminconnect==0.3.2
+gpxpy==1.6.2
