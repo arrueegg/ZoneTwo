@@ -102,6 +102,8 @@ npm run build   # also type-checks frontend
 
 **Preparation workout editing**: Season Plan workout rows use controlled run-type choices (easy, recovery, long, steady, tempo, interval, hill, race pace, progression, strides, strength, rest), color-coded by type. Distances in the editable proposal are rounded to 0.5 km increments.
 
+**Preparation coach**: `/preparation/season-plan/discuss` must build the current season plan before answering, so questions like "do you see the current plan?" and target-specific questions can reference concrete weeks, peak volume, longest run, and workout types. Frontend topic prefixes may be sent to the backend for context, but the visible chat history should show only the user's actual message.
+
 **Coach context and preparation**: The AI Coach prompt includes upcoming preparation targets and saved upcoming planned workouts, so coach answers can account for target events plus accepted/completed/skipped workouts.
 
 ## Roadmap

@@ -242,8 +242,11 @@ async def discuss_season_plan(
         raise HTTPException(status_code=404, detail="Athlete not found")
 
     events = await _upcoming_events(athlete_id, db)
+    latest_metrics = await _latest_metrics(athlete_id, db)
+    recent_runs = await _recent_runs(athlete_id, db)
     options = _plan_options(body.days_per_week, body.max_weekly_km, body.long_run_day, body.emphasis)
-    return _discuss_season_plan(body.message, events, options)
+    weeks = _build_season_plan(events, athlete, latest_metrics, recent_runs, options)
+    return _discuss_season_plan(body.message, events, options, weeks)
 
 
 @router.post("/events")
@@ -776,10 +779,18 @@ def _discuss_season_plan(
     message: str,
     events: list[TrainingEvent],
     options: dict[str, Any],
+    weeks: list[dict[str, Any]],
 ) -> dict[str, Any]:
     text = message.lower()
     patch: dict[str, Any] = {}
     replies: list[str] = []
+    target = _target_from_message(message, events)
+
+    if any(phrase in text for phrase in ["do you see", "current plan", "what is the plan", "show me the plan", "summarize the plan"]):
+        replies.append(_season_plan_overview(weeks, target))
+
+    if any(phrase in text for phrase in ["shape the plan", "shape this plan", "for this target", "for that target", "realistic"]):
+        replies.append(_target_plan_answer(target or (events[0] if events else None), weeks))
 
     if any(word in text for word in ["tired", "fatigue", "sore", "injury", "pain", "conservative", "easier"]):
         patch["emphasis"] = "conservative"
@@ -826,16 +837,81 @@ def _discuss_season_plan(
             replies.append("I do not see a major priority conflict in the current event list.")
 
     if not replies:
-        next_event = events[0].name if events else "your next target"
-        replies.append(
-            f"The season plan should stay centered on {next_event}, with one primary weekly plan. "
-            "Tell me if you want it easier, faster, more endurance-focused, fewer days, or a different long-run day."
-        )
+        replies.append(_season_plan_overview(weeks, target or (events[0] if events else None)))
 
     return {
         "reply": " ".join(replies),
         "options_patch": patch,
     }
+
+
+def _target_from_message(message: str, events: list[TrainingEvent]) -> TrainingEvent | None:
+    text = message.lower()
+    for event in events:
+        if event.name.lower() in text or event.event_date.isoformat() in text:
+            return event
+    return None
+
+
+def _season_plan_overview(weeks: list[dict[str, Any]], target: TrainingEvent | None = None) -> str:
+    if not weeks:
+        return "I do not see a generated season plan yet. Add a target first, then the season plan can be discussed week by week."
+
+    scoped = [week for week in weeks if not target or week.get("primary_event_id") == target.id] or weeks
+    first_weeks = scoped[:3]
+    peak_week = max(scoped, key=lambda week: float(week.get("target_km") or 0))
+    long_week = max(scoped, key=lambda week: float(week.get("long_run_km") or 0))
+    week_bits = [
+        f"week {week['week']} is {week.get('focus', 'training')} at {week.get('target_km', 0)} km"
+        for week in first_weeks
+    ]
+    target_text = f" for {target.name}" if target else ""
+    return (
+        f"Yes. I see {len(scoped)} planned week{'s' if len(scoped) != 1 else ''}{target_text}: "
+        f"{'; '.join(week_bits)}. The biggest planned week is week {peak_week['week']} at {peak_week.get('target_km', 0)} km, "
+        f"and the longest run is {long_week.get('long_run_km', 0)} km in week {long_week['week']}. "
+        "So the useful discussion is whether that progression is realistic, too cautious, or too aggressive."
+    )
+
+
+def _target_plan_answer(target: TrainingEvent | None, weeks: list[dict[str, Any]]) -> str:
+    if not target:
+        return "Pick a target first and I can judge how it should shape the season plan."
+
+    scoped = [week for week in weeks if week.get("primary_event_id") == target.id] or weeks
+    if not scoped:
+        return f"I see {target.name}, but there is no generated plan block for it yet."
+
+    target_distance = target.target_distance_km or _distance_guess(target.name) or 10
+    days_to_event = max(0, (target.event_date - date.today()).days)
+    peak = max(float(week.get("target_km") or 0) for week in scoped)
+    longest = max(float(week.get("long_run_km") or 0) for week in scoped)
+    quality_types = _quality_types(scoped)
+    priority_text = "main goal" if target.priority == "A" else "supporting target" if target.priority == "B" else "practice target"
+    distance_ratio = longest / max(1.0, target_distance)
+
+    judgement = "The long run is in a sensible range for this target."
+    if distance_ratio < 0.65:
+        judgement = "The long run looks light for this target, so endurance support is the first thing I would improve."
+    elif distance_ratio > 1.35:
+        judgement = "The long run may be more than you need for this target, so protect freshness and avoid making every week endurance-heavy."
+
+    quality_text = f"Quality should mainly be {', '.join(quality_types)}." if quality_types else "Quality should stay controlled until the plan has a clearer workout focus."
+    return (
+        f"{target.name} is {days_to_event} days away and should behave like a {priority_text}. "
+        f"For a {target_distance:g} km target, the plan should peak around {peak:.1f} km/week with a longest run near {longest:.1f} km. "
+        f"{judgement} {quality_text}"
+    )
+
+
+def _quality_types(weeks: list[dict[str, Any]]) -> list[str]:
+    quality: list[str] = []
+    for week in weeks:
+        for workout in week.get("workouts", []):
+            workout_type = str(workout.get("type", "")).lower()
+            if workout_type and workout_type not in {"easy", "recovery", "long"} and workout_type not in quality:
+                quality.append(workout_type)
+    return quality[:3]
 
 
 def _week_workouts(

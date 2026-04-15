@@ -151,7 +151,7 @@ export function Preparation() {
   });
 
   const discussSeason = useMutation({
-    mutationFn: async (message: string) => {
+    mutationFn: async ({ message }: { message: string; display: string }) => {
       const { data } = await api.post("/preparation/season-plan/discuss", {
         message,
         ...serializePlanOptions(planOptions),
@@ -160,8 +160,8 @@ export function Preparation() {
       });
       return data as { reply: string; options_patch: Partial<{ days_per_week: number; max_weekly_km: number | null; long_run_day: string; emphasis: string }> };
     },
-    onSuccess: (data, message) => {
-      setDiscussion((items) => [...items, { role: "user", text: message }, { role: "plan", text: data.reply }]);
+    onSuccess: (data, variables) => {
+      setDiscussion((items) => [...items, { role: "user", text: variables.display }, { role: "plan", text: data.reply }]);
       if (Object.keys(data.options_patch).length > 0) {
         setPlanOptions((options) => ({
           ...options,
@@ -248,7 +248,11 @@ export function Preparation() {
           onQuestionChange={setQuestion}
           onAsk={() => {
             if (!question.trim()) return;
-            discussSeason.mutate(formatCoachMessage(question.trim(), coachTopic, events.find((event) => event.id === coachTargetId)));
+            const display = question.trim();
+            discussSeason.mutate({
+              display,
+              message: formatCoachMessage(display, coachTopic, events.find((event) => event.id === coachTargetId)),
+            });
             setQuestion("");
           }}
           discussing={discussSeason.isPending}
