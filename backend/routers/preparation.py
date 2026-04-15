@@ -57,6 +57,30 @@ class WorkoutPatch(BaseModel):
     notes: str | None = None
 
 
+class SeasonWorkoutIn(BaseModel):
+    type: str
+    day: str
+    distance_km: float | None = Field(None, gt=0)
+    title: str = Field(..., min_length=1, max_length=160)
+    description: str | None = None
+
+
+class SeasonWeekIn(BaseModel):
+    week: int = Field(..., ge=1)
+    starts_on: date
+    primary_event_id: str
+    focus: str
+    target_km: float = Field(..., ge=0)
+    long_run_km: float = Field(..., ge=0)
+    adjustment_note: str | None = None
+    workouts: list[SeasonWorkoutIn]
+
+
+class SeasonWorkoutsIn(BaseModel):
+    replace: bool = True
+    weeks: list[SeasonWeekIn]
+
+
 @router.get("/events")
 async def list_events(
     athlete_id: str = Query(...),
@@ -159,6 +183,67 @@ async def save_season_workouts(
 
     await db.commit()
     return [_serialize_workout(workout) for workout in sorted(saved, key=lambda w: (w.planned_date, w.sort_order))]
+
+
+@router.post("/season-workouts/save")
+async def save_custom_season_workouts(
+    body: SeasonWorkoutsIn,
+    athlete_id: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict[str, Any]]:
+    athlete = await db.get(Athlete, athlete_id)
+    if not athlete:
+        raise HTTPException(status_code=404, detail="Athlete not found")
+
+    existing_result = await db.execute(
+        select(PlannedWorkout).where(
+            PlannedWorkout.athlete_id == athlete_id,
+            PlannedWorkout.planned_date >= date.today(),
+        )
+    )
+    existing = list(existing_result.scalars().all())
+    if existing and not body.replace:
+        return [_serialize_workout(workout) for workout in sorted(existing, key=lambda w: (w.planned_date, w.sort_order))]
+
+    for workout in existing:
+        await db.delete(workout)
+
+    saved: list[PlannedWorkout] = []
+    for week in body.weeks:
+        for sort_order, workout in enumerate(week.workouts):
+            planned = PlannedWorkout(
+                id=f"workout_{uuid4().hex}",
+                event_id=week.primary_event_id,
+                athlete_id=athlete_id,
+                week=week.week,
+                planned_date=_date_for_day(week.starts_on, workout.day),
+                workout_type=workout.type,
+                title=workout.title,
+                description=workout.description,
+                distance_km=workout.distance_km,
+                status="planned",
+                sort_order=sort_order,
+            )
+            db.add(planned)
+            saved.append(planned)
+
+    await db.commit()
+    return [_serialize_workout(workout) for workout in sorted(saved, key=lambda w: (w.planned_date, w.sort_order))]
+
+
+@router.post("/season-plan/discuss")
+async def discuss_season_plan(
+    body: PlanDiscussionIn,
+    athlete_id: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    athlete = await db.get(Athlete, athlete_id)
+    if not athlete:
+        raise HTTPException(status_code=404, detail="Athlete not found")
+
+    events = await _upcoming_events(athlete_id, db)
+    options = _plan_options(body.days_per_week, body.max_weekly_km, body.long_run_day, body.emphasis)
+    return _discuss_season_plan(body.message, events, options)
 
 
 @router.post("/events")
@@ -685,6 +770,72 @@ def _season_note(primary: TrainingEvent, supporting: list[str], base_note: str) 
     if supporting:
         return f"{base_note} This week is aligned to {primary.name}; also keep {', '.join(supporting)} in view."
     return f"{base_note} This is the single plan for the week, aligned to {primary.name}."
+
+
+def _discuss_season_plan(
+    message: str,
+    events: list[TrainingEvent],
+    options: dict[str, Any],
+) -> dict[str, Any]:
+    text = message.lower()
+    patch: dict[str, Any] = {}
+    replies: list[str] = []
+
+    if any(word in text for word in ["tired", "fatigue", "sore", "injury", "pain", "conservative", "easier"]):
+        patch["emphasis"] = "conservative"
+        patch["days_per_week"] = max(3, int(options["days_per_week"]) - 1)
+        replies.append("I would make the season more conservative: one fewer run day if possible, easier intensity, and no stacked hard weeks.")
+
+    if any(word in text for word in ["more endurance", "longer", "long run", "aerobic"]):
+        patch["emphasis"] = "endurance"
+        replies.append("I would bias the season toward endurance, keeping quality controlled and protecting the long-run progression.")
+
+    if any(word in text for word in ["speed", "faster", "interval", "race pace"]):
+        patch["emphasis"] = "speed"
+        replies.append("I would add a speed/race-rhythm bias, but only inside the one weekly season plan so it does not compete with other targets.")
+
+    if any(word in text for word in ["3 days", "three days", "3 runs"]):
+        patch["days_per_week"] = 3
+        replies.append("I set the plan toward 3 run days per week.")
+    elif any(word in text for word in ["4 days", "four days", "4 runs"]):
+        patch["days_per_week"] = 4
+        replies.append("I set the plan toward 4 run days per week.")
+    elif any(word in text for word in ["5 days", "five days", "5 runs"]):
+        patch["days_per_week"] = 5
+        replies.append("I set the plan toward 5 run days per week.")
+
+    for day in ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]:
+        if day.lower() in text or {
+            "Mon": "monday",
+            "Tue": "tuesday",
+            "Wed": "wednesday",
+            "Thu": "thursday",
+            "Fri": "friday",
+            "Sat": "saturday",
+            "Sun": "sunday",
+        }[day] in text:
+            patch["long_run_day"] = day
+            replies.append(f"I moved the long run preference to {day}.")
+            break
+
+    if "too many" in text or "conflict" in text or "overlap" in text:
+        recommendations = _season_recommendations(events)
+        if recommendations:
+            replies.append("The main season issue is priority conflict: " + " ".join(rec["body"] for rec in recommendations[:2]))
+        else:
+            replies.append("I do not see a major priority conflict in the current event list.")
+
+    if not replies:
+        next_event = events[0].name if events else "your next target"
+        replies.append(
+            f"The season plan should stay centered on {next_event}, with one primary weekly plan. "
+            "Tell me if you want it easier, faster, more endurance-focused, fewer days, or a different long-run day."
+        )
+
+    return {
+        "reply": " ".join(replies),
+        "options_patch": patch,
+    }
 
 
 def _week_workouts(

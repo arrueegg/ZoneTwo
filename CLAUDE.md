@@ -54,10 +54,10 @@ npm run build   # also type-checks frontend
 **Preparation targets** (`training_events` table):
 - User-defined upcoming events and target runs/races.
 - Core fields: `name`, `event_date`, `event_type`, `target_distance_km`, `target_time_sec`, `priority`, `notes`
-- Used by the Preparation page to build a calendar and adaptive rule-based training plan.
+- Used by the Preparation page to build one aligned, editable season plan.
 
 **Planned workouts** (`planned_workouts` table):
-- Persisted calendar workouts created from a generated preparation plan and then editable by the user.
+- Persisted future workouts created from an edited season plan and then editable by the user.
 - Core fields: `event_id`, `planned_date`, `week`, `workout_type`, `title`, `description`, `distance_km`, `status`, `notes`
 - Status values: `planned`, `accepted`, `completed`, `skipped`, `moved`
 
@@ -68,7 +68,7 @@ npm run build   # also type-checks frontend
 | Dashboard | Today: recovery metrics + training status badge + readiness + endurance score; PMC (CTL/ATL/TSB + goal line); Performance tiles (race predictions, VO2max, fitness age); rule-based coaching insights; AI weekly debrief (3 cards); CTL/ATL/TSB/TSS glossary |
 | Activities | Weekly-grouped list with per-week totals; expandable rows: training effect badges (0–5 color scale), cadence, max HR, elevation, VO2max estimate, HR zone breakdown (minutes + %); `↗` link on each row opens full detail page |
 | Activity Detail | `/activities/:id` — stat tiles, training effect tile, GPS map (Leaflet/OpenStreetMap), elevation/HR/pace/cadence intraday charts (vs distance), splits table. Track downloaded on-demand from Garmin GPX and cached in `activity_tracks` table. |
-| Preparation | Upcoming event calendar; add/delete target events; selected-event readiness summary; adjustable adaptive weekly preparation plan based on days-to-event, current CTL/ATL/TSB/readiness, recent run volume, target distance/time, available run days, max weekly volume, long-run day, and training emphasis; save/replace generated plans into editable planned workouts; plan discussion box for questions/constraints. |
+| Preparation | Season-level target planning only: add/delete upcoming events, generate one aligned plan per week across all targets, edit proposed weekly workouts directly, save the edited season into future planned workouts, and discuss/apply changes to the whole season plan. |
 | Recovery | Today: all recovery metrics + sleep stage bar + both readiness scores + training status + endurance score; Readiness chart (computed vs. Garmin); Sleep stages stacked bar (60 days); Body battery area; HRV + 7-day avg; Resting HR; Steps; Stress; SpO₂ + respiration; Endurance score area; HR zone distribution (12 weeks). Route remains `/wellness`; user-facing label is Recovery. |
 | Coach | Chat interface with data-grounded AI coach (Groq/Llama 3). Context window: last 14 days of wellness + 30 days of activities + full athlete profile. Rate-limited to 20 messages/day. Quick-start suggestion chips on empty state. |
 | Settings | Garmin connect/disconnect; Sync Now; Training profile (threshold HR, max HR, target CTL, goal, target race) |
@@ -94,11 +94,11 @@ npm run build   # also type-checks frontend
 
 **Frontend type safety**: `WellnessPoint` in `frontend/src/hooks/useWellness.ts` and `MetricsSummary` in `frontend/src/api/client.ts` must stay in sync with the backend `/metrics/wellness` and `/metrics/summary` responses. These drift silently — check both when adding fields.
 
-**Preparation planning**: `GET /preparation/events/{id}/plan` returns an adaptive, rule-based plan rather than a static stored plan. It uses the upcoming event, recent running load, latest CTL/ATL/TSB/readiness, target distance/time, weeks remaining, and user controls (`days_per_week`, `max_weekly_km`, `long_run_day`, `emphasis`). `POST /preparation/events/{id}/workouts/generate` persists the generated plan to `planned_workouts` so users can edit status/date/title/distance. `POST /preparation/events/{id}/discuss` gives rule-based explanations and constraint handling. Persist event intent and user calendar decisions; derive recommendations from current data.
+**Preparation planning**: The frontend should use season-level planning as the only planning interaction. `GET /preparation/season-plan` returns the aligned proposal, and `POST /preparation/season-workouts/save` persists the edited proposal to `planned_workouts`. Legacy selected-event endpoints still exist for compatibility, but do not expose them as a competing planning workflow. Persist event intent and user decisions; derive recommendations from current data.
 
-**Season alignment**: When multiple upcoming events overlap, the app must still produce only one training plan per week. `GET /preparation/season-plan` builds an aligned season view by selecting one primary event for each week and listing nearby supporting events. It flags conflicting calendars such as A/B races too close together, too many priority targets in six weeks, or events with very different demands in the same block. `POST /preparation/season-workouts/generate` saves this aligned one-plan-per-week calendar into future `planned_workouts`; `replace=true` replaces future planned workouts, not historical/completed calendar entries. Prefer season-level saving whenever more than one upcoming event exists. The Preparation frontend uses four full-width workspaces: Event Plan manages targets and previews one selected event, Season Plan is the actual aligned multi-event plan, Calendar edits saved workouts from `GET /preparation/workouts`, and Coach discusses the selected target.
+**Season alignment**: Preparation has a single source of truth: the season plan. When multiple upcoming events overlap, the app must still produce only one training plan per week. `GET /preparation/season-plan` builds an aligned season view by selecting one primary event for each week and listing nearby supporting events. It flags conflicting target schedules such as A/B races too close together, too many priority targets in six weeks, or events with very different demands in the same block. `POST /preparation/season-workouts/save` persists the edited season proposal into future `planned_workouts`; `replace=true` replaces future planned workouts, not historical/completed entries. The Preparation frontend should not expose separate event-plan or calendar workspaces. It has Season Plan, where users manage targets and edit proposed workouts directly, and Coach, where users discuss the entire season plan and can apply plan-setting changes back to the proposal.
 
-**Coach context and preparation**: The AI Coach prompt includes upcoming preparation targets and saved upcoming planned workouts, so coach answers can account for target events, accepted/completed/skipped workouts, and the current training calendar.
+**Coach context and preparation**: The AI Coach prompt includes upcoming preparation targets and saved upcoming planned workouts, so coach answers can account for target events plus accepted/completed/skipped workouts.
 
 ## Roadmap
 
@@ -114,7 +114,7 @@ Work on items in priority order unless instructed otherwise.
 
 ### ✅ 3. Preparation goals + adaptive event planning — INITIAL SLICE DONE
 
-**Goal**: Users can add upcoming events/races/runs they are training for, see them in a clear calendar, and get an adaptive preparation plan.
+**Goal**: Users can add upcoming events/races/runs they are training for and maintain one adaptive season plan across those targets.
 
 **Implemented scope**:
 - `training_events` table for user-created upcoming targets.
@@ -122,7 +122,7 @@ Work on items in priority order unless instructed otherwise.
 - `/preparation/events/{event_id}/plan` rule-based adaptive plan endpoint with user-adjustable planning controls.
 - `/preparation/events/{event_id}/discuss` plan discussion endpoint.
 - `/preparation/events/{event_id}/workouts` + `/preparation/workouts/{workout_id}` endpoints for persistent planned workouts.
-- Frontend Preparation page with event form, event list, calendar timeline, readiness summary, concrete weekly workout cards, adjustment controls, editable saved workout calendar, and a plan discussion panel.
+- Frontend Preparation page with season-level target management, editable aligned weekly workout proposal, season-save action, and whole-season coach discussion.
 - Coach prompt includes upcoming targets and saved planned workouts.
 
 **Planning inputs**:
@@ -135,7 +135,7 @@ Work on items in priority order unless instructed otherwise.
 **Next improvements**:
 - Improve matching completed Garmin activities back to planned workouts automatically.
 - Upgrade plan discussion from rule-based replies to the existing Groq coach when the API key is available.
-- Add calendar export / notifications.
+- Add notifications for upcoming saved workouts.
 - Add plan recalculation history so users can see what changed after sync.
 
 ### 4. Performance trends page
