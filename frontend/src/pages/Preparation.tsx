@@ -22,7 +22,7 @@ type PlanOptions = {
   emphasis: string;
 };
 
-type WorkspaceMode = "season-plan" | "coach";
+type WorkspaceMode = "events" | "season-plan" | "coach";
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -40,7 +40,7 @@ export function Preparation() {
   const { athleteId } = useAthleteContext();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<EventForm>(initialForm);
-  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("season-plan");
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("events");
   const [planOptions, setPlanOptions] = useState<PlanOptions>({
     days_per_week: 4,
     max_weekly_km: "",
@@ -186,8 +186,8 @@ export function Preparation() {
 
       <ModeSwitch mode={workspaceMode} onModeChange={setWorkspaceMode} />
 
-      {workspaceMode === "season-plan" && (
-        <SeasonPlanWorkspace
+      {workspaceMode === "events" && (
+        <EventsWorkspace
           events={targetItems}
           form={form}
           onFormChange={setForm}
@@ -195,6 +195,11 @@ export function Preparation() {
           creatingEvent={createEvent.isPending}
           onDeleteEvent={(eventId) => deleteEvent.mutate(eventId)}
           deletingEvent={deleteEvent.isPending}
+        />
+      )}
+
+      {workspaceMode === "season-plan" && (
+        <SeasonPlanWorkspace
           seasonPlan={seasonPlan ?? null}
           weeks={editableWeeks}
           onWeeksChange={setEditableWeeks}
@@ -223,9 +228,8 @@ export function Preparation() {
   );
 }
 
-function SeasonPlanWorkspace({
+function EventsWorkspace({
   events, form, onFormChange, onCreateEvent, creatingEvent, onDeleteEvent, deletingEvent,
-  seasonPlan, weeks, onWeeksChange, options, onOptionsChange, onSaveSeasonPlan, savingSeasonPlan,
 }: {
   events: Array<TrainingEvent & { daysLeft: number }>;
   form: EventForm;
@@ -234,6 +238,31 @@ function SeasonPlanWorkspace({
   creatingEvent: boolean;
   onDeleteEvent: (eventId: string) => void;
   deletingEvent: boolean;
+}) {
+  return (
+    <section style={PANEL}>
+      <div style={SECTION_HEADER}>
+        <div>
+          <h2 style={SECTION_TITLE}>Events</h2>
+          <p style={{ ...MUTED, margin: 0 }}>Add the races and target runs the season plan should account for.</p>
+        </div>
+      </div>
+      <TargetManager
+        events={events}
+        form={form}
+        onFormChange={onFormChange}
+        onCreateEvent={onCreateEvent}
+        creatingEvent={creatingEvent}
+        onDeleteEvent={onDeleteEvent}
+        deletingEvent={deletingEvent}
+      />
+    </section>
+  );
+}
+
+function SeasonPlanWorkspace({
+  seasonPlan, weeks, onWeeksChange, options, onOptionsChange, onSaveSeasonPlan, savingSeasonPlan,
+}: {
   seasonPlan: SeasonPlan | null;
   weeks: SeasonPlanWeek[];
   onWeeksChange: (weeks: SeasonPlanWeek[]) => void;
@@ -255,16 +284,6 @@ function SeasonPlanWorkspace({
           </button>
         </div>
       </div>
-
-      <TargetManager
-        events={events}
-        form={form}
-        onFormChange={onFormChange}
-        onCreateEvent={onCreateEvent}
-        creatingEvent={creatingEvent}
-        onDeleteEvent={onDeleteEvent}
-        deletingEvent={deletingEvent}
-      />
 
       <PlanSettings options={options} onOptionsChange={onOptionsChange} />
 
@@ -490,6 +509,7 @@ function CoachWorkspace({
 
 function ModeSwitch({ mode, onModeChange }: { mode: WorkspaceMode; onModeChange: (mode: WorkspaceMode) => void }) {
   const items: Array<{ mode: WorkspaceMode; title: string; description: string }> = [
+    { mode: "events", title: "Events", description: "Add and manage targets" },
     { mode: "season-plan", title: "Season Plan", description: "Edit and save the real plan" },
     { mode: "coach", title: "Coach", description: "Discuss the whole season" },
   ];

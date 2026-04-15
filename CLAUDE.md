@@ -96,7 +96,7 @@ npm run build   # also type-checks frontend
 
 **Preparation planning**: The frontend should use season-level planning as the only planning interaction. `GET /preparation/season-plan` returns the aligned proposal, and `POST /preparation/season-workouts/save` persists the edited proposal to `planned_workouts`. Legacy selected-event endpoints still exist for compatibility, but do not expose them as a competing planning workflow. Persist event intent and user decisions; derive recommendations from current data.
 
-**Season alignment**: Preparation has a single source of truth: the season plan. When multiple upcoming events overlap, the app must still produce only one training plan per week. `GET /preparation/season-plan` builds an aligned season view by selecting one primary event for each week and listing nearby supporting events. It flags conflicting target schedules such as A/B races too close together, too many priority targets in six weeks, or events with very different demands in the same block. `POST /preparation/season-workouts/save` persists the edited season proposal into future `planned_workouts`; `replace=true` replaces future planned workouts, not historical/completed entries. The Preparation frontend should not expose separate event-plan or calendar workspaces. It has Season Plan, where users manage targets and edit proposed workouts directly, and Coach, where users discuss the entire season plan and can apply plan-setting changes back to the proposal.
+**Season alignment**: Preparation has a single source of truth: the season plan. When multiple upcoming events overlap, the app must still produce only one training plan per week. `GET /preparation/season-plan` builds an aligned season view by selecting one primary event for each week and listing nearby supporting events. It flags conflicting target schedules such as A/B races too close together, too many priority targets in six weeks, or events with very different demands in the same block. `POST /preparation/season-workouts/save` persists the edited season proposal into future `planned_workouts`; `replace=true` replaces future planned workouts, not historical/completed entries. The Preparation frontend should not expose separate single-event plan or calendar workspaces. It has Events for target list/add/delete only, Season Plan for editing the proposed weekly workouts directly, and Coach for discussing the entire season plan and applying plan-setting changes back to the proposal.
 
 **Coach context and preparation**: The AI Coach prompt includes upcoming preparation targets and saved upcoming planned workouts, so coach answers can account for target events plus accepted/completed/skipped workouts.
 
@@ -122,7 +122,7 @@ Work on items in priority order unless instructed otherwise.
 - `/preparation/events/{event_id}/plan` rule-based adaptive plan endpoint with user-adjustable planning controls.
 - `/preparation/events/{event_id}/discuss` plan discussion endpoint.
 - `/preparation/events/{event_id}/workouts` + `/preparation/workouts/{workout_id}` endpoints for persistent planned workouts.
-- Frontend Preparation page with season-level target management, editable aligned weekly workout proposal, season-save action, and whole-season coach discussion.
+- Frontend Preparation page with Events target management, editable aligned weekly workout proposal in Season Plan, season-save action, and whole-season coach discussion.
 - Coach prompt includes upcoming targets and saved planned workouts.
 
 **Planning inputs**:
