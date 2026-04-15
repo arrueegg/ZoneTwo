@@ -184,12 +184,25 @@ async def sync_athlete_garmin(
             if value is not None:
                 setattr(record, field, value)
 
-        # Merge training status + endurance score
+        # Merge extras: training status, endurance score, sleep stages, training readiness
         extras = extras_by_date.get(day_str, {})
-        if extras.get("training_status"):
-            record.training_status = extras["training_status"]
-        if extras.get("endurance_score") is not None:
-            record.endurance_score = float(extras["endurance_score"])
+        for field in (
+            "training_status",
+            "training_readiness_description",
+        ):
+            if extras.get(field):
+                setattr(record, field, extras[field])
+        for field in (
+            "endurance_score",
+            "sleep_score",
+            "sleep_deep_seconds",
+            "sleep_light_seconds",
+            "sleep_rem_seconds",
+            "sleep_awake_seconds",
+            "training_readiness_score",
+        ):
+            if extras.get(field) is not None:
+                setattr(record, field, float(extras[field]))
 
         updated += 1
 

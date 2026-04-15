@@ -26,6 +26,13 @@ class Activity(Base):
     normalized_power = Column(Float)         # for cycling with power meter
     tss = Column(Float)                      # Training Stress Score
 
+    # Training effect
+    aerobic_effect = Column(Float)          # Garmin aerobic training effect (0–5)
+    anaerobic_effect = Column(Float)        # Garmin anaerobic training effect (0–5)
+    training_effect_label = Column(String)  # e.g. "BASE", "TEMPO", "THRESHOLD"
+    avg_cadence = Column(Float)             # steps/min (run) or rpm (ride)
+    vo2max_estimated = Column(Float)        # per-activity VO2max estimate from Garmin
+
     # Enriched from Garmin
     hrv_rmssd = Column(Float)               # morning HRV reading on activity date
     sleep_score = Column(Float)

@@ -34,6 +34,15 @@ class DailyMetrics(Base):
     spo2_avg = Column(Float)
     respiration_avg = Column(Float)
 
+    # Sleep stages (from Garmin sleep data)
+    sleep_score = Column(Float)          # Garmin overall sleep quality score (0–100)
+    sleep_deep_seconds = Column(Float)
+    sleep_light_seconds = Column(Float)
+    sleep_rem_seconds = Column(Float)
+    sleep_awake_seconds = Column(Float)  # awake time during sleep window
+
     # Garmin-derived performance metrics
     training_status = Column(String)     # e.g. "PRODUCTIVE", "MAINTAINING", "RECOVERY"
     endurance_score = Column(Float)
+    training_readiness_score = Column(Float)        # Garmin combined readiness (0–100)
+    training_readiness_description = Column(String) # e.g. "READY", "FAIR", "NOT_READY"

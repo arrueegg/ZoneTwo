@@ -150,7 +150,7 @@ async def fetch_daily_extras(
     email: str, password: str, start: date, end: date, client: Garmin | None = None,
 ) -> list[dict[str, Any]]:
     """
-    Fetch daily training status and endurance score for each day in the range.
+    Fetch per-day training status, endurance score, sleep stages, and training readiness.
     Pass an existing `client` to avoid a redundant login.
     """
     if client is None:
@@ -164,6 +164,7 @@ async def fetch_daily_extras(
         day_str = current.isoformat()
         entry: dict[str, Any] = {"date": day_str}
 
+        # Training status
         try:
             ts = await asyncio.to_thread(_with_retry, client.get_training_status, day_str)
             if ts:
@@ -171,16 +172,49 @@ async def fetch_daily_extras(
                     ts.get("trainingStatus")
                     or ts.get("latestTrainingStatusRecord", {}).get("trainingStatus")
                 )
-                entry["training_load_balance"] = ts.get("trainingLoadBalance")
         except Exception:
             pass
 
+        # Endurance score
         try:
             es = await asyncio.to_thread(_with_retry, client.get_endurance_score, day_str)
             if isinstance(es, list) and es:
                 entry["endurance_score"] = es[0].get("value") or es[0].get("enduranceScoreValue")
             elif isinstance(es, dict):
                 entry["endurance_score"] = es.get("value") or es.get("enduranceScoreValue")
+        except Exception:
+            pass
+
+        # Sleep stages + sleep score
+        try:
+            sleep = await asyncio.to_thread(_with_retry, client.get_sleep_data, day_str)
+            dto = sleep.get("dailySleepDTO") or sleep if isinstance(sleep, dict) else {}
+            if dto:
+                scores = dto.get("sleepScores") or {}
+                overall = scores.get("overallScore") or {}
+                entry["sleep_score"] = overall.get("value")
+                entry["sleep_deep_seconds"] = dto.get("deepSleepSeconds")
+                entry["sleep_light_seconds"] = dto.get("lightSleepSeconds")
+                entry["sleep_rem_seconds"] = dto.get("remSleepSeconds")
+                entry["sleep_awake_seconds"] = dto.get("awakeSleepSeconds")
+        except Exception:
+            pass
+
+        # Training readiness
+        try:
+            tr = await asyncio.to_thread(_with_retry, client.get_training_readiness, day_str)
+            record = None
+            if isinstance(tr, list) and tr:
+                record = tr[0]
+            elif isinstance(tr, dict):
+                record = tr
+            if record:
+                entry["training_readiness_score"] = record.get("score") or record.get("trainingReadinessScore")
+                entry["training_readiness_description"] = (
+                    record.get("levelDescription")
+                    or record.get("trainingReadinessDescription")
+                    or record.get("feedbackPhrase")
+                )
         except Exception:
             pass
 
@@ -317,6 +351,13 @@ def normalize_garmin_activity(raw: dict[str, Any], athlete_id: str) -> dict[str,
     avg_speed = raw.get("averageSpeed")
     avg_pace = (1000 / avg_speed) if avg_speed and avg_speed > 0 else None
 
+    # Cadence: running uses steps/min, cycling uses rpm
+    avg_cadence = (
+        raw.get("averageRunningCadenceInStepsPerMinute")
+        or raw.get("averageBikingCadenceInRevPerMinute")
+        or raw.get("averageCadence")
+    )
+
     return {
         "id": f"garmin_{raw['activityId']}",
         "athlete_id": athlete_id,
@@ -332,6 +373,11 @@ def normalize_garmin_activity(raw: dict[str, Any], athlete_id: str) -> dict[str,
         "avg_pace_sec_km": avg_pace,
         "normalized_power": raw.get("normPower") or raw.get("avgPower"),
         "tss": round(tss, 1) if tss else None,
+        "aerobic_effect": raw.get("aerobicTrainingEffect"),
+        "anaerobic_effect": raw.get("anaerobicTrainingEffect"),
+        "training_effect_label": raw.get("trainingEffectLabel"),
+        "avg_cadence": float(avg_cadence) if avg_cadence else None,
+        "vo2max_estimated": raw.get("vO2MaxValue") or raw.get("vo2MaxValue"),
         "raw_data": {k: v for k, v in raw.items() if not isinstance(v, (dict, list))},
     }
 

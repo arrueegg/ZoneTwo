@@ -115,21 +115,71 @@ function HrZoneBreakdown({ zones }: { zones: Record<string, number> | null }) {
 
 // ── expanded detail panel ────────────────────────────────────────────────────
 
+const TE_COLOR: Record<number, { bg: string; color: string }> = {
+  1: { bg: "#f3f4f6", color: "#6b7280" },
+  2: { bg: "#dbeafe", color: "#1d4ed8" },
+  3: { bg: "#d1fae5", color: "#065f46" },
+  4: { bg: "#fef3c7", color: "#92400e" },
+  5: { bg: "#fee2e2", color: "#991b1b" },
+};
+
+function TrainingEffectBadge({ label, value, type }: { label: string; value: number; type: "aerobic" | "anaerobic" }) {
+  const tier = Math.min(5, Math.max(1, Math.round(value)));
+  const { bg, color } = TE_COLOR[tier] ?? TE_COLOR[1];
+  const descriptions: Record<number, string> = {
+    1: "No benefit", 2: "Minor", 3: "Improving", 4: "Highly improving", 5: "Overreaching",
+  };
+  return (
+    <div title={descriptions[tier]} style={{
+      display: "flex", flexDirection: "column", alignItems: "center",
+      padding: "6px 12px", borderRadius: 8, background: bg, minWidth: 72,
+    }}>
+      <span style={{ fontSize: 10, color, textTransform: "uppercase", letterSpacing: "0.04em", fontWeight: 600 }}>
+        {type === "aerobic" ? "Aerobic TE" : "Anaerobic TE"}
+      </span>
+      <span style={{ fontSize: 18, fontWeight: 700, color, lineHeight: 1.3 }}>{value.toFixed(1)}</span>
+      {label && <span style={{ fontSize: 10, color, opacity: 0.8 }}>{label.replace(/_/g, " ")}</span>}
+    </div>
+  );
+}
+
 function ActivityDetail({ activity: a }: { activity: Activity }) {
   const isRunning = ["run", "trail_run", "walk", "hiking"].includes(a.sport_type);
+  const isCycling = ["ride", "virtual_ride"].includes(a.sport_type);
+  const showTrainingEffect = a.aerobic_effect != null || a.anaerobic_effect != null;
+
   return (
     <div style={{
       padding: "14px 20px 16px 48px",
       background: "#f8fafc",
       borderBottom: "1px solid #e5e7eb",
     }}>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "12px 32px", fontSize: 13, color: "#374151" }}>
+      {/* Training effect badges */}
+      {showTrainingEffect && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          {a.aerobic_effect != null && (
+            <TrainingEffectBadge label={a.training_effect_label ?? ""} value={a.aerobic_effect} type="aerobic" />
+          )}
+          {a.anaerobic_effect != null && (
+            <TrainingEffectBadge label="" value={a.anaerobic_effect} type="anaerobic" />
+          )}
+        </div>
+      )}
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "10px 28px", fontSize: 13, color: "#374151" }}>
         {isRunning && a.avg_pace_sec_km != null && (
           <DetailStat label="Avg Pace" value={fmtPace(a.avg_pace_sec_km)} />
         )}
         {a.max_hr != null && <DetailStat label="Max HR" value={`${Math.round(a.max_hr)} bpm`} />}
+        {a.avg_cadence != null && (
+          <DetailStat
+            label={isCycling ? "Cadence" : "Cadence"}
+            value={`${Math.round(a.avg_cadence)} ${isCycling ? "rpm" : "spm"}`}
+          />
+        )}
         {a.elevation_m != null && <DetailStat label="Elevation" value={`${Math.round(a.elevation_m)} m`} />}
         {a.normalized_power != null && <DetailStat label="NP" value={`${Math.round(a.normalized_power)} W`} />}
+        {a.vo2max_estimated != null && <DetailStat label="VO₂max est." value={a.vo2max_estimated.toFixed(1)} />}
         {a.hrv_rmssd != null && <DetailStat label="HRV (post)" value={`${a.hrv_rmssd.toFixed(1)} ms`} />}
         {a.body_battery != null && <DetailStat label="Body Battery" value={`${Math.round(a.body_battery)}`} />}
       </div>

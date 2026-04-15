@@ -32,6 +32,11 @@ export interface Activity {
   avg_pace_sec_km: number | null;
   normalized_power: number | null;
   tss: number | null;
+  aerobic_effect: number | null;
+  anaerobic_effect: number | null;
+  training_effect_label: string | null;
+  avg_cadence: number | null;
+  vo2max_estimated: number | null;
   hrv_rmssd: number | null;
   sleep_score: number | null;
   body_battery: number | null;

@@ -66,6 +66,11 @@ async def wellness(
             "hrv_rmssd": r.hrv_rmssd,
             "resting_hr": r.resting_hr,
             "sleep_hours": r.sleep_hours,
+            "sleep_score": r.sleep_score,
+            "sleep_deep_seconds": r.sleep_deep_seconds,
+            "sleep_light_seconds": r.sleep_light_seconds,
+            "sleep_rem_seconds": r.sleep_rem_seconds,
+            "sleep_awake_seconds": r.sleep_awake_seconds,
             "body_battery_high": r.body_battery_high,
             "body_battery_low": r.body_battery_low,
             "body_battery_wake": r.body_battery_wake,
@@ -74,6 +79,10 @@ async def wellness(
             "spo2_avg": r.spo2_avg,
             "respiration_avg": r.respiration_avg,
             "readiness_score": r.readiness_score,
+            "training_readiness_score": r.training_readiness_score,
+            "training_readiness_description": r.training_readiness_description,
+            "training_status": r.training_status,
+            "endurance_score": r.endurance_score,
         }
         for r in rows
     ]
@@ -180,4 +189,11 @@ async def metrics_summary(
         "readiness_score": latest.readiness_score,
         "training_status": latest.training_status,
         "endurance_score": latest.endurance_score,
+        "training_readiness_score": latest.training_readiness_score,
+        "training_readiness_description": latest.training_readiness_description,
+        "sleep_score": latest.sleep_score,
+        "sleep_deep_seconds": latest.sleep_deep_seconds,
+        "sleep_light_seconds": latest.sleep_light_seconds,
+        "sleep_rem_seconds": latest.sleep_rem_seconds,
+        "sleep_awake_seconds": latest.sleep_awake_seconds,
     }
