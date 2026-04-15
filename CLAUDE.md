@@ -56,6 +56,11 @@ npm run build   # also type-checks frontend
 - Core fields: `name`, `event_date`, `event_type`, `target_distance_km`, `target_time_sec`, `priority`, `notes`
 - Used by the Preparation page to build a calendar and adaptive rule-based training plan.
 
+**Planned workouts** (`planned_workouts` table):
+- Persisted calendar workouts created from a generated preparation plan and then editable by the user.
+- Core fields: `event_id`, `planned_date`, `week`, `workout_type`, `title`, `description`, `distance_km`, `status`, `notes`
+- Status values: `planned`, `accepted`, `completed`, `skipped`, `moved`
+
 ### What is shown in the frontend
 
 | Page | Shows |
@@ -63,7 +68,7 @@ npm run build   # also type-checks frontend
 | Dashboard | Today: recovery metrics + training status badge + readiness + endurance score; PMC (CTL/ATL/TSB + goal line); Performance tiles (race predictions, VO2max, fitness age); rule-based coaching insights; AI weekly debrief (3 cards); CTL/ATL/TSB/TSS glossary |
 | Activities | Weekly-grouped list with per-week totals; expandable rows: training effect badges (0–5 color scale), cadence, max HR, elevation, VO2max estimate, HR zone breakdown (minutes + %); `↗` link on each row opens full detail page |
 | Activity Detail | `/activities/:id` — stat tiles, training effect tile, GPS map (Leaflet/OpenStreetMap), elevation/HR/pace/cadence intraday charts (vs distance), splits table. Track downloaded on-demand from Garmin GPX and cached in `activity_tracks` table. |
-| Preparation | Upcoming event calendar; add/delete target events; selected-event readiness summary; adjustable adaptive weekly preparation plan based on days-to-event, current CTL/ATL/TSB/readiness, recent run volume, target distance/time, available run days, max weekly volume, long-run day, and training emphasis; plan discussion box for questions/constraints. |
+| Preparation | Upcoming event calendar; add/delete target events; selected-event readiness summary; adjustable adaptive weekly preparation plan based on days-to-event, current CTL/ATL/TSB/readiness, recent run volume, target distance/time, available run days, max weekly volume, long-run day, and training emphasis; save/replace generated plans into editable planned workouts; plan discussion box for questions/constraints. |
 | Wellness | Today: all recovery metrics + sleep stage bar + both readiness scores + training status + endurance score; Readiness chart (computed vs. Garmin); Sleep stages stacked bar (60 days); Body battery area; HRV + 7-day avg; Resting HR; Steps; Stress; SpO₂ + respiration; Endurance score area; HR zone distribution (12 weeks) |
 | Coach | Chat interface with data-grounded AI coach (Groq/Llama 3). Context window: last 14 days of wellness + 30 days of activities + full athlete profile. Rate-limited to 20 messages/day. Quick-start suggestion chips on empty state. |
 | Settings | Garmin connect/disconnect; Sync Now; Training profile (threshold HR, max HR, target CTL, goal, target race) |
@@ -89,7 +94,9 @@ npm run build   # also type-checks frontend
 
 **Frontend type safety**: `WellnessPoint` in `frontend/src/hooks/useWellness.ts` and `MetricsSummary` in `frontend/src/api/client.ts` must stay in sync with the backend `/metrics/wellness` and `/metrics/summary` responses. These drift silently — check both when adding fields.
 
-**Preparation planning**: `GET /preparation/events/{id}/plan` returns an adaptive, rule-based plan rather than a static stored plan. It uses the upcoming event, recent running load, latest CTL/ATL/TSB/readiness, target distance/time, weeks remaining, and user controls (`days_per_week`, `max_weekly_km`, `long_run_day`, `emphasis`). This keeps the plan responsive after each sync. `POST /preparation/events/{id}/discuss` gives rule-based explanations and constraint handling. Persist event intent; derive plan recommendations.
+**Preparation planning**: `GET /preparation/events/{id}/plan` returns an adaptive, rule-based plan rather than a static stored plan. It uses the upcoming event, recent running load, latest CTL/ATL/TSB/readiness, target distance/time, weeks remaining, and user controls (`days_per_week`, `max_weekly_km`, `long_run_day`, `emphasis`). `POST /preparation/events/{id}/workouts/generate` persists the generated plan to `planned_workouts` so users can edit status/date/title/distance. `POST /preparation/events/{id}/discuss` gives rule-based explanations and constraint handling. Persist event intent and user calendar decisions; derive recommendations from current data.
+
+**Coach context and preparation**: The AI Coach prompt includes upcoming preparation targets and saved upcoming planned workouts, so coach answers can account for target events, accepted/completed/skipped workouts, and the current training calendar.
 
 ## Roadmap
 
@@ -112,7 +119,9 @@ Work on items in priority order unless instructed otherwise.
 - `/preparation/events` CRUD endpoints.
 - `/preparation/events/{event_id}/plan` rule-based adaptive plan endpoint with user-adjustable planning controls.
 - `/preparation/events/{event_id}/discuss` plan discussion endpoint.
-- Frontend Preparation page with event form, event list, calendar timeline, readiness summary, concrete weekly workout cards, adjustment controls, and a plan discussion panel.
+- `/preparation/events/{event_id}/workouts` + `/preparation/workouts/{workout_id}` endpoints for persistent planned workouts.
+- Frontend Preparation page with event form, event list, calendar timeline, readiness summary, concrete weekly workout cards, adjustment controls, editable saved workout calendar, and a plan discussion panel.
+- Coach prompt includes upcoming targets and saved planned workouts.
 
 **Planning inputs**:
 - Event date, type, priority, target distance, target time.
@@ -122,9 +131,8 @@ Work on items in priority order unless instructed otherwise.
 - User constraints: run days per week, max weekly km, preferred long-run day, training emphasis.
 
 **Next improvements**:
-- Persist user-edited plan workouts and completion state.
 - Add explicit A/B/C race priority behavior.
-- Feed selected event context into AI Coach prompts.
+- Improve matching completed Garmin activities back to planned workouts automatically.
 - Upgrade plan discussion from rule-based replies to the existing Groq coach when the API key is available.
 - Add calendar export / notifications.
 - Add plan recalculation history so users can see what changed after sync.

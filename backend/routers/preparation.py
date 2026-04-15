@@ -14,7 +14,7 @@ from database import get_db
 from models.activity import Activity
 from models.athlete import Athlete
 from models.metrics import DailyMetrics
-from models.preparation import TrainingEvent
+from models.preparation import PlannedWorkout, TrainingEvent
 
 router = APIRouter(prefix="/preparation", tags=["preparation"])
 
@@ -45,6 +45,16 @@ class PlanDiscussionIn(BaseModel):
     max_weekly_km: float | None = Field(None, gt=0)
     long_run_day: str = "Sun"
     emphasis: str = "balanced"
+
+
+class WorkoutPatch(BaseModel):
+    planned_date: date | None = None
+    workout_type: str | None = None
+    title: str | None = Field(None, min_length=1, max_length=160)
+    description: str | None = None
+    distance_km: float | None = Field(None, gt=0)
+    status: str | None = Field(None, pattern="^(planned|accepted|completed|skipped|moved)$")
+    notes: str | None = None
 
 
 @router.get("/events")
@@ -141,6 +151,8 @@ async def get_event_plan(
     athlete = await db.get(Athlete, event.athlete_id)
     if not athlete:
         raise HTTPException(status_code=404, detail="Athlete not found")
+    if not athlete:
+        raise HTTPException(status_code=404, detail="Athlete not found")
 
     latest_metrics = await _latest_metrics(event.athlete_id, db)
     recent_runs = await _recent_runs(event.athlete_id, db)
@@ -188,6 +200,97 @@ async def discuss_event_plan(
             "weeks": plan,
         },
     }
+
+
+@router.get("/events/{event_id}/workouts")
+async def list_planned_workouts(event_id: str, db: AsyncSession = Depends(get_db)) -> list[dict[str, Any]]:
+    event = await db.get(TrainingEvent, event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    result = await db.execute(
+        select(PlannedWorkout)
+        .where(PlannedWorkout.event_id == event_id)
+        .order_by(PlannedWorkout.planned_date, PlannedWorkout.sort_order)
+    )
+    return [_serialize_workout(workout) for workout in result.scalars().all()]
+
+
+@router.post("/events/{event_id}/workouts/generate")
+async def save_generated_workouts(
+    event_id: str,
+    days_per_week: int = Query(4, ge=3, le=7),
+    max_weekly_km: float | None = Query(None, gt=0),
+    long_run_day: str = Query("Sun"),
+    emphasis: str = Query("balanced"),
+    replace: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict[str, Any]]:
+    event = await db.get(TrainingEvent, event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    existing_result = await db.execute(
+        select(PlannedWorkout).where(PlannedWorkout.event_id == event_id)
+    )
+    existing = list(existing_result.scalars().all())
+    if existing and not replace:
+        return [_serialize_workout(workout) for workout in sorted(existing, key=lambda w: (w.planned_date, w.sort_order))]
+
+    for workout in existing:
+        await db.delete(workout)
+
+    athlete = await db.get(Athlete, event.athlete_id)
+    latest_metrics = await _latest_metrics(event.athlete_id, db)
+    recent_runs = await _recent_runs(event.athlete_id, db)
+    context = _planning_context(event, athlete, latest_metrics, recent_runs)
+    options = _plan_options(days_per_week, max_weekly_km, long_run_day, emphasis)
+    plan = _build_plan(event, context, options)
+
+    saved: list[PlannedWorkout] = []
+    for week in plan:
+        week_start = date.fromisoformat(week["starts_on"])
+        for sort_order, workout in enumerate(week["workouts"]):
+            planned = PlannedWorkout(
+                id=f"workout_{uuid4().hex}",
+                event_id=event_id,
+                athlete_id=event.athlete_id,
+                week=week["week"],
+                planned_date=_date_for_day(week_start, workout["day"]),
+                workout_type=workout["type"],
+                title=workout["title"],
+                description=workout["description"],
+                distance_km=workout.get("distance_km"),
+                status="planned",
+                sort_order=sort_order,
+            )
+            db.add(planned)
+            saved.append(planned)
+
+    await db.commit()
+    return [_serialize_workout(workout) for workout in sorted(saved, key=lambda w: (w.planned_date, w.sort_order))]
+
+
+@router.patch("/workouts/{workout_id}")
+async def update_planned_workout(
+    workout_id: str,
+    body: WorkoutPatch,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    workout = await db.get(PlannedWorkout, workout_id)
+    if not workout:
+        raise HTTPException(status_code=404, detail="Workout not found")
+
+    for field, value in body.model_dump(exclude_unset=True).items():
+        if field in {"title", "description", "workout_type", "status", "notes"} and isinstance(value, str):
+            value = value.strip()
+        if field in {"description", "notes"} and not value:
+            value = None
+        setattr(workout, field, value)
+
+    await db.commit()
+    await db.refresh(workout)
+    return _serialize_workout(workout)
 
 
 async def _latest_metrics(athlete_id: str, db: AsyncSession) -> DailyMetrics | None:
@@ -504,6 +607,10 @@ def _day_order(day: str) -> int:
     return {"Mon": 0, "Tue": 1, "Wed": 2, "Thu": 3, "Fri": 4, "Sat": 5, "Sun": 6}.get(day, 6)
 
 
+def _date_for_day(week_start: date, day: str) -> date:
+    return week_start + timedelta(days=_day_order(day))
+
+
 def _discuss_plan(
     message: str,
     event: TrainingEvent,
@@ -610,4 +717,23 @@ def _serialize_event(event: TrainingEvent) -> dict[str, Any]:
         "notes": event.notes,
         "created_at": event.created_at.isoformat() if event.created_at else None,
         "updated_at": event.updated_at.isoformat() if event.updated_at else None,
+    }
+
+
+def _serialize_workout(workout: PlannedWorkout) -> dict[str, Any]:
+    return {
+        "id": workout.id,
+        "event_id": workout.event_id,
+        "athlete_id": workout.athlete_id,
+        "week": workout.week,
+        "planned_date": workout.planned_date.isoformat(),
+        "workout_type": workout.workout_type,
+        "title": workout.title,
+        "description": workout.description,
+        "distance_km": workout.distance_km,
+        "status": workout.status,
+        "notes": workout.notes,
+        "sort_order": workout.sort_order,
+        "created_at": workout.created_at.isoformat() if workout.created_at else None,
+        "updated_at": workout.updated_at.isoformat() if workout.updated_at else None,
     }

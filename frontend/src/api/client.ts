@@ -134,6 +134,23 @@ export interface PreparationPlan {
   weeks: PreparationWeek[];
 }
 
+export interface PlannedWorkout {
+  id: string;
+  event_id: string;
+  athlete_id: string;
+  week: number;
+  planned_date: string;
+  workout_type: string;
+  title: string;
+  description: string | null;
+  distance_km: number | null;
+  status: "planned" | "accepted" | "completed" | "skipped" | "moved";
+  notes: string | null;
+  sort_order: number;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
 export interface Insight {
   type: "warning" | "positive" | "info";
   title: string;

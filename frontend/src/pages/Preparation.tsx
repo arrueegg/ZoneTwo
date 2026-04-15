@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../api/client";
-import type { PreparationPlan, TrainingEvent } from "../api/client";
+import type { PlannedWorkout, PreparationPlan, TrainingEvent } from "../api/client";
 import { useAthleteContext } from "../main";
 
 type EventForm = {
@@ -76,6 +76,15 @@ export function Preparation() {
     enabled: Boolean(selectedEventId),
   });
 
+  const { data: plannedWorkouts = [] } = useQuery<PlannedWorkout[]>({
+    queryKey: ["planned-workouts", selectedEventId],
+    queryFn: async () => {
+      const { data } = await api.get(`/preparation/events/${selectedEventId}/workouts`);
+      return data;
+    },
+    enabled: Boolean(selectedEventId),
+  });
+
   const discussPlan = useMutation({
     mutationFn: async (message: string) => {
       const { data } = await api.post(`/preparation/events/${selectedEventId}/discuss`, {
@@ -87,6 +96,28 @@ export function Preparation() {
     onSuccess: (data, message) => {
       setDiscussion((items) => [...items, { role: "user", text: message }, { role: "plan", text: data.reply }]);
       queryClient.setQueryData(["preparation-plan", selectedEventId, planOptions], data.plan);
+    },
+  });
+
+  const savePlan = useMutation({
+    mutationFn: async (replace: boolean) => {
+      const { data } = await api.post(`/preparation/events/${selectedEventId}/workouts/generate`, null, {
+        params: { ...serializePlanOptions(planOptions), replace },
+      });
+      return data as PlannedWorkout[];
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["planned-workouts", selectedEventId] });
+    },
+  });
+
+  const updateWorkout = useMutation({
+    mutationFn: async ({ id, patch }: { id: string; patch: Partial<PlannedWorkout> }) => {
+      const { data } = await api.patch(`/preparation/workouts/${id}`, patch);
+      return data as PlannedWorkout;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["planned-workouts", selectedEventId] });
     },
   });
 
@@ -206,6 +237,11 @@ export function Preparation() {
                 setQuestion("");
               }}
               discussing={discussPlan.isPending}
+              plannedWorkouts={plannedWorkouts}
+              onSavePlan={(replace) => savePlan.mutate(replace)}
+              savingPlan={savePlan.isPending}
+              onUpdateWorkout={(id, patch) => updateWorkout.mutate({ id, patch })}
+              updatingWorkout={updateWorkout.isPending}
               onDelete={() => deleteEvent.mutate(selectedEvent.id)}
               deleting={deleteEvent.isPending}
             />
@@ -217,7 +253,8 @@ export function Preparation() {
 }
 
 function PlanView({
-  event, plan, options, onOptionsChange, discussion, question, onQuestionChange, onAsk, discussing, onDelete, deleting,
+  event, plan, options, onOptionsChange, discussion, question, onQuestionChange, onAsk, discussing,
+  plannedWorkouts, onSavePlan, savingPlan, onUpdateWorkout, updatingWorkout, onDelete, deleting,
 }: {
   event: TrainingEvent;
   plan: PreparationPlan;
@@ -228,6 +265,11 @@ function PlanView({
   onQuestionChange: (value: string) => void;
   onAsk: () => void;
   discussing: boolean;
+  plannedWorkouts: PlannedWorkout[];
+  onSavePlan: (replace: boolean) => void;
+  savingPlan: boolean;
+  onUpdateWorkout: (id: string, patch: Partial<PlannedWorkout>) => void;
+  updatingWorkout: boolean;
   onDelete: () => void;
   deleting: boolean;
 }) {
@@ -283,6 +325,14 @@ function PlanView({
       </div>
 
       <h2 style={{ ...SECTION_TITLE, marginTop: 28 }}>Plan</h2>
+      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+        <button onClick={() => onSavePlan(false)} disabled={savingPlan} style={PRIMARY_BTN}>
+          {plannedWorkouts.length ? "Keep Saved Calendar" : "Save Plan to Calendar"}
+        </button>
+        <button onClick={() => onSavePlan(true)} disabled={savingPlan} style={GHOST_BTN}>
+          {savingPlan ? "Saving..." : "Replace Saved Calendar"}
+        </button>
+      </div>
       <div style={{ display: "grid", gap: 12 }}>
         {plan.weeks.map((week) => (
           <article key={week.week} style={WEEK_ROW}>
@@ -310,6 +360,13 @@ function PlanView({
         ))}
       </div>
 
+      <h2 style={{ ...SECTION_TITLE, marginTop: 28 }}>Workout Calendar</h2>
+      <PlannedWorkoutCalendar
+        workouts={plannedWorkouts}
+        onUpdateWorkout={onUpdateWorkout}
+        updating={updatingWorkout}
+      />
+
       <h2 style={{ ...SECTION_TITLE, marginTop: 28 }}>Discuss</h2>
       <div style={DISCUSS_BOX}>
         {discussion.length === 0 && (
@@ -335,6 +392,62 @@ function PlanView({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function PlannedWorkoutCalendar({
+  workouts, onUpdateWorkout, updating,
+}: {
+  workouts: PlannedWorkout[];
+  onUpdateWorkout: (id: string, patch: Partial<PlannedWorkout>) => void;
+  updating: boolean;
+}) {
+  if (!workouts.length) {
+    return (
+      <div style={EMPTY_BOX}>
+        Save the generated plan to turn it into editable calendar workouts.
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      {workouts.map((workout) => (
+        <div key={workout.id} style={CALENDAR_ROW}>
+          <input
+            type="date"
+            value={workout.planned_date}
+            onChange={(event) => onUpdateWorkout(workout.id, { planned_date: event.target.value } as Partial<PlannedWorkout>)}
+            style={{ ...INPUT, minWidth: 142 }}
+            disabled={updating}
+          />
+          <select
+            value={workout.status}
+            onChange={(event) => onUpdateWorkout(workout.id, { status: event.target.value as PlannedWorkout["status"] })}
+            style={{ ...INPUT, minWidth: 118 }}
+            disabled={updating}
+          >
+            {["planned", "accepted", "completed", "skipped", "moved"].map((status) => (
+              <option key={status} value={status}>{status}</option>
+            ))}
+          </select>
+          <input
+            value={workout.title}
+            onChange={(event) => onUpdateWorkout(workout.id, { title: event.target.value })}
+            style={{ ...INPUT, flex: 1, minWidth: 180 }}
+            disabled={updating}
+          />
+          <input
+            type="number"
+            value={workout.distance_km ?? ""}
+            onChange={(event) => onUpdateWorkout(workout.id, { distance_km: event.target.value ? Number(event.target.value) : null })}
+            style={{ ...INPUT, width: 92 }}
+            disabled={updating}
+          />
+          <span style={BADGE}>{workout.workout_type}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -478,3 +591,5 @@ const WORKOUT_ROW: React.CSSProperties = { display: "grid", gap: 2, fontSize: 13
 const DISCUSS_BOX: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: 14, display: "grid", gap: 10 };
 const USER_MSG: React.CSSProperties = { justifySelf: "end", maxWidth: "85%", background: "#e0f2fe", color: "#075985", borderRadius: 8, padding: "8px 10px", fontSize: 13 };
 const PLAN_MSG: React.CSSProperties = { justifySelf: "start", maxWidth: "85%", background: "#f3f4f6", color: "#374151", borderRadius: 8, padding: "8px 10px", fontSize: 13 };
+const EMPTY_BOX: React.CSSProperties = { border: "1px dashed #d1d5db", borderRadius: 8, padding: 14, color: "#6b7280", fontSize: 13 };
+const CALENDAR_ROW: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: 10, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" };

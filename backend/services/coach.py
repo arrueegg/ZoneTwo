@@ -17,6 +17,7 @@ from config import settings
 from models.activity import Activity
 from models.athlete import Athlete
 from models.metrics import DailyMetrics
+from models.preparation import PlannedWorkout, TrainingEvent
 
 
 def _fmt_duration(sec: float | None) -> str:
@@ -82,6 +83,34 @@ async def build_system_prompt(athlete_id: str, db: AsyncSession) -> str:
         .order_by(Activity.start_time.desc())
     )
     activities: list[Activity] = list(acts_result.scalars().all())
+
+    # Upcoming preparation events and persisted planned workouts
+    today = datetime.now(timezone.utc).date()
+    events_result = await db.execute(
+        select(TrainingEvent)
+        .where(
+            and_(
+                TrainingEvent.athlete_id == athlete_id,
+                TrainingEvent.event_date >= today,
+            )
+        )
+        .order_by(TrainingEvent.event_date)
+        .limit(5)
+    )
+    events: list[TrainingEvent] = list(events_result.scalars().all())
+
+    workouts_result = await db.execute(
+        select(PlannedWorkout)
+        .where(
+            and_(
+                PlannedWorkout.athlete_id == athlete_id,
+                PlannedWorkout.planned_date >= today,
+            )
+        )
+        .order_by(PlannedWorkout.planned_date, PlannedWorkout.sort_order)
+        .limit(30)
+    )
+    planned_workouts: list[PlannedWorkout] = list(workouts_result.scalars().all())
 
     # ── Athlete profile section ────────────────────────────────────────────────
     profile_lines = [
@@ -151,6 +180,20 @@ async def build_system_prompt(athlete_id: str, db: AsyncSession) -> str:
         parts = [p for p in [date_str, a.sport_type, dist, dur, hr, pace, tss, te, label] if p]
         activity_lines.append("  " + " | ".join(parts))
 
+    event_lines: list[str] = []
+    for event in events:
+        distance = f"{event.target_distance_km:.1f}km" if event.target_distance_km else "distance not set"
+        event_lines.append(
+            f"  {event.event_date} | {event.name} | {event.priority} priority | {distance}"
+        )
+
+    planned_lines: list[str] = []
+    for workout in planned_workouts:
+        distance = f"{workout.distance_km:.1f}km" if workout.distance_km else "distance not set"
+        planned_lines.append(
+            f"  {workout.planned_date} | {workout.status} | {workout.workout_type} | {distance} | {workout.title}"
+        )
+
     sections = [
         "## Athlete profile",
         *profile_lines,
@@ -163,6 +206,12 @@ async def build_system_prompt(athlete_id: str, db: AsyncSession) -> str:
         "",
         "## Activities (last 30 days, newest first)",
         *(activity_lines if activity_lines else ["  no activities"]),
+        "",
+        "## Upcoming preparation targets",
+        *(event_lines if event_lines else ["  no upcoming targets"]),
+        "",
+        "## Planned workouts (upcoming)",
+        *(planned_lines if planned_lines else ["  no planned workouts saved"]),
     ]
 
     data_block = "\n".join(sections)
