@@ -153,7 +153,7 @@ export function Settings() {
         ) : (
           <form onSubmit={handleGarminConnect} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
-              Uses your Garmin Connect login to pull HRV, sleep, and wellness data.
+              Uses your Garmin Connect login to pull HRV, sleep, and recovery data.
               Your password is encrypted before storage.
             </p>
             <Field
@@ -188,7 +188,7 @@ export function Settings() {
       {athleteId && (
         <Section title="Sync Data">
           <p style={{ fontSize: 14, color: "#6b7280", marginBottom: 12 }}>
-            Pull the latest activities and wellness data from your connected sources.
+            Pull the latest activities and recovery data from your connected sources.
           </p>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <button onClick={handleSync} disabled={syncing} style={{ ...primaryBtn, opacity: syncing ? 0.6 : 1 }}>

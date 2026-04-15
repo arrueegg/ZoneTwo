@@ -54,7 +54,7 @@ function App() {
           <NavLink to="/" end style={navStyle}>Dashboard</NavLink>
           <NavLink to="/activities" style={navStyle}>Activities</NavLink>
           <NavLink to="/preparation" style={navStyle}>Preparation</NavLink>
-          <NavLink to="/wellness" style={navStyle}>Wellness</NavLink>
+          <NavLink to="/wellness" style={navStyle}>Recovery</NavLink>
           <NavLink to="/coach" style={navStyle}>Coach</NavLink>
           <NavLink to="/settings" style={navStyle}>Settings</NavLink>
           {athlete.name && (

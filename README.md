@@ -1,6 +1,6 @@
 # ZoneTwo
 
-Training analytics app connecting Strava and Garmin Connect. Shows performance management (CTL/ATL/TSB), wellness trends (HRV, sleep, body battery), readiness scores, anomaly detection, and AI coaching summaries.
+Training analytics app connecting Strava and Garmin Connect. Shows performance management (CTL/ATL/TSB), recovery trends (HRV, sleep, body battery), readiness scores, anomaly detection, and AI coaching summaries.
 
 ## Prerequisites
 
@@ -76,5 +76,5 @@ backend/    FastAPI + async SQLAlchemy + aiosqlite (SQLite for local dev)
 |------|-------------|
 | Dashboard | Today's snapshot, PMC chart, anomaly flags, AI debrief |
 | Activities | Full activity log with HR zones, TSS, pace, elevation |
-| Wellness | HRV, sleep, body battery trends + zone distribution |
+| Recovery | HRV, sleep, body battery trends + zone distribution |
 | Settings | Connect accounts, set threshold HR, target CTL, trigger sync |

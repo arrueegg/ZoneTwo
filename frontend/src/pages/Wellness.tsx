@@ -23,7 +23,7 @@ export function Wellness() {
   if (!athleteId) {
     return (
       <div style={{ maxWidth: 960, margin: "0 auto", padding: "48px 16px", fontFamily: "sans-serif", textAlign: "center" }}>
-        <p style={{ color: "#6b7280" }}>Connect your Garmin account in <a href="/settings">Settings</a> to see wellness data.</p>
+        <p style={{ color: "#6b7280" }}>Connect your Garmin account in <a href="/settings">Settings</a> to see recovery data.</p>
       </div>
     );
   }
@@ -37,7 +37,7 @@ export function Wellness() {
 
   return (
     <div style={{ maxWidth: 960, margin: "0 auto", padding: "24px 16px", fontFamily: "sans-serif" }}>
-      <h1 style={{ marginBottom: 4 }}>Wellness</h1>
+      <h1 style={{ marginBottom: 4 }}>Recovery</h1>
       <p style={{ color: "#6b7280", marginBottom: 32 }}>Last 90 days · Garmin Connect</p>
 
       {/* Today snapshot */}

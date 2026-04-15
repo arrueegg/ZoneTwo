@@ -191,7 +191,7 @@ export function Coach() {
                 Z
               </div>
               <p style={{ color: "#6b7280", fontSize: 14, marginBottom: 20, textAlign: "center" }}>
-                I have access to your last 14 days of wellness data and 30 days of activities.<br />
+                I have access to your last 14 days of recovery data and 30 days of activities.<br />
                 Ask me anything.
               </p>
               {/* Quick-start suggestions */}
