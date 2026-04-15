@@ -134,6 +134,24 @@ export interface PreparationPlan {
   weeks: PreparationWeek[];
 }
 
+export interface SeasonRecommendation {
+  severity: "low" | "medium" | "high";
+  title: string;
+  body: string;
+}
+
+export interface SeasonPlanWeek extends PreparationWeek {
+  primary_event_id: string;
+  primary_event_name: string;
+  supporting_events: string[];
+}
+
+export interface SeasonPlan {
+  events: TrainingEvent[];
+  recommendations: SeasonRecommendation[];
+  weeks: SeasonPlanWeek[];
+}
+
 export interface PlannedWorkout {
   id: string;
   event_id: string;

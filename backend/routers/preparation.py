@@ -75,6 +75,92 @@ async def list_events(
     return [_serialize_event(event) for event in result.scalars().all()]
 
 
+@router.get("/season-plan")
+async def get_season_plan(
+    athlete_id: str = Query(...),
+    days_per_week: int = Query(4, ge=3, le=7),
+    max_weekly_km: float | None = Query(None, gt=0),
+    long_run_day: str = Query("Sun"),
+    emphasis: str = Query("balanced"),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    athlete = await db.get(Athlete, athlete_id)
+    if not athlete:
+        raise HTTPException(status_code=404, detail="Athlete not found")
+
+    events = await _upcoming_events(athlete_id, db)
+    latest_metrics = await _latest_metrics(athlete_id, db)
+    recent_runs = await _recent_runs(athlete_id, db)
+    options = _plan_options(days_per_week, max_weekly_km, long_run_day, emphasis)
+
+    weeks = _build_season_plan(events, athlete, latest_metrics, recent_runs, options)
+    return {
+        "events": [_serialize_event(event) for event in events],
+        "recommendations": _season_recommendations(events),
+        "weeks": weeks,
+    }
+
+
+@router.post("/season-workouts/generate")
+async def save_season_workouts(
+    athlete_id: str = Query(...),
+    days_per_week: int = Query(4, ge=3, le=7),
+    max_weekly_km: float | None = Query(None, gt=0),
+    long_run_day: str = Query("Sun"),
+    emphasis: str = Query("balanced"),
+    replace: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict[str, Any]]:
+    athlete = await db.get(Athlete, athlete_id)
+    if not athlete:
+        raise HTTPException(status_code=404, detail="Athlete not found")
+
+    events = await _upcoming_events(athlete_id, db)
+    if not events:
+        return []
+
+    existing_result = await db.execute(
+        select(PlannedWorkout).where(
+            PlannedWorkout.athlete_id == athlete_id,
+            PlannedWorkout.planned_date >= date.today(),
+        )
+    )
+    existing = list(existing_result.scalars().all())
+    if existing and not replace:
+        return [_serialize_workout(workout) for workout in sorted(existing, key=lambda w: (w.planned_date, w.sort_order))]
+
+    for workout in existing:
+        await db.delete(workout)
+
+    latest_metrics = await _latest_metrics(athlete_id, db)
+    recent_runs = await _recent_runs(athlete_id, db)
+    options = _plan_options(days_per_week, max_weekly_km, long_run_day, emphasis)
+    weeks = _build_season_plan(events, athlete, latest_metrics, recent_runs, options)
+
+    saved: list[PlannedWorkout] = []
+    for week in weeks:
+        week_start = date.fromisoformat(week["starts_on"])
+        for sort_order, workout in enumerate(week["workouts"]):
+            planned = PlannedWorkout(
+                id=f"workout_{uuid4().hex}",
+                event_id=week["primary_event_id"],
+                athlete_id=athlete_id,
+                week=week["week"],
+                planned_date=_date_for_day(week_start, workout["day"]),
+                workout_type=workout["type"],
+                title=workout["title"],
+                description=workout["description"],
+                distance_km=workout.get("distance_km"),
+                status="planned",
+                sort_order=sort_order,
+            )
+            db.add(planned)
+            saved.append(planned)
+
+    await db.commit()
+    return [_serialize_workout(workout) for workout in sorted(saved, key=lambda w: (w.planned_date, w.sort_order))]
+
+
 @router.post("/events")
 async def create_event(
     body: EventIn,
@@ -149,8 +235,6 @@ async def get_event_plan(
         raise HTTPException(status_code=404, detail="Event not found")
 
     athlete = await db.get(Athlete, event.athlete_id)
-    if not athlete:
-        raise HTTPException(status_code=404, detail="Athlete not found")
     if not athlete:
         raise HTTPException(status_code=404, detail="Athlete not found")
 
@@ -303,6 +387,18 @@ async def _latest_metrics(athlete_id: str, db: AsyncSession) -> DailyMetrics | N
     return result.scalar_one_or_none()
 
 
+async def _upcoming_events(athlete_id: str, db: AsyncSession) -> list[TrainingEvent]:
+    result = await db.execute(
+        select(TrainingEvent)
+        .where(
+            TrainingEvent.athlete_id == athlete_id,
+            TrainingEvent.event_date >= date.today(),
+        )
+        .order_by(TrainingEvent.event_date)
+    )
+    return list(result.scalars().all())
+
+
 async def _recent_runs(athlete_id: str, db: AsyncSession) -> list[Activity]:
     start = datetime.now() - timedelta(days=28)
     result = await db.execute(
@@ -431,6 +527,146 @@ def _build_plan(
         })
 
     return plan
+
+
+def _build_season_plan(
+    events: list[TrainingEvent],
+    athlete: Athlete,
+    latest_metrics: DailyMetrics | None,
+    recent_runs: list[Activity],
+    options: dict[str, Any],
+) -> list[dict[str, Any]]:
+    if not events:
+        return []
+
+    today = date.today()
+    last_event_date = max(event.event_date for event in events)
+    weeks = min(24, max(1, ceil((last_event_date - today).days / 7)))
+    weeks_by_event: dict[str, list[dict[str, Any]]] = {}
+    contexts: dict[str, dict[str, Any]] = {}
+    for event in events:
+        context = _planning_context(event, athlete, latest_metrics, recent_runs)
+        contexts[event.id] = context
+        weeks_by_event[event.id] = _build_plan(event, context, options)
+
+    aligned: list[dict[str, Any]] = []
+    for index in range(weeks):
+        week_start = today + timedelta(days=index * 7)
+        week_end = week_start + timedelta(days=6)
+        primary = _primary_event_for_week(events, week_start, week_end)
+        event_weeks = weeks_by_event.get(primary.id, [])
+        weeks_until_primary = max(0, ceil((primary.event_date - week_start).days / 7))
+        event_week_index = max(0, len(event_weeks) - weeks_until_primary)
+        event_week_index = min(event_week_index, max(0, len(event_weeks) - 1))
+        source_week = event_weeks[event_week_index] if event_weeks else _fallback_week(primary, contexts[primary.id], options, index)
+        supporting = [
+            event.name
+            for event in events
+            if event.id != primary.id and week_start <= event.event_date <= week_end + timedelta(days=21)
+        ][:3]
+
+        aligned.append({
+            **source_week,
+            "week": index + 1,
+            "starts_on": week_start.isoformat(),
+            "primary_event_id": primary.id,
+            "primary_event_name": primary.name,
+            "supporting_events": supporting,
+            "adjustment_note": _season_note(primary, supporting, source_week.get("adjustment_note", "")),
+        })
+
+    return aligned
+
+
+def _primary_event_for_week(events: list[TrainingEvent], week_start: date, week_end: date) -> TrainingEvent:
+    priority_weight = {"A": 300, "B": 180, "C": 80}
+
+    def score(event: TrainingEvent) -> float:
+        days_until = (event.event_date - week_start).days
+        if days_until < -1:
+            return -9999
+        race_week_bonus = 220 if week_start <= event.event_date <= week_end else 0
+        urgency = max(0, 140 - max(0, days_until) * 3)
+        distance = event.target_distance_km or _distance_guess(event.name) or 10
+        distance_weight = min(80, distance * 2)
+        return priority_weight.get(event.priority, 120) + race_week_bonus + urgency + distance_weight
+
+    return max(events, key=score)
+
+
+def _season_recommendations(events: list[TrainingEvent]) -> list[dict[str, str]]:
+    recommendations: list[dict[str, str]] = []
+    sorted_events = sorted(events, key=lambda event: event.event_date)
+    important = [event for event in sorted_events if event.priority in {"A", "B"}]
+
+    for previous, current in zip(important, important[1:]):
+        gap = (current.event_date - previous.event_date).days
+        if gap < 14:
+            recommendations.append({
+                "severity": "high",
+                "title": "Events are too close together",
+                "body": f"{previous.name} and {current.name} are only {gap} days apart. Treat one as a tune-up or lower its priority.",
+            })
+        elif gap < 28 and (previous.priority == "A" or current.priority == "A"):
+            recommendations.append({
+                "severity": "medium",
+                "title": "Limited rebuild time",
+                "body": f"{previous.name} and {current.name} are {gap} days apart. The weeks between them should focus on recovery and sharpening, not a full new build.",
+            })
+
+    six_weeks = timedelta(days=42)
+    for event in sorted_events:
+        cluster = [
+            other for other in important
+            if event.event_date <= other.event_date <= event.event_date + six_weeks
+        ]
+        if len(cluster) >= 3:
+            recommendations.append({
+                "severity": "high",
+                "title": "Too many priority events",
+                "body": f"{len(cluster)} A/B events fall within six weeks starting at {event.name}. Pick one main goal and downgrade the others.",
+            })
+            break
+
+    for previous, current in zip(sorted_events, sorted_events[1:]):
+        prev_dist = previous.target_distance_km or _distance_guess(previous.name) or 0
+        curr_dist = current.target_distance_km or _distance_guess(current.name) or 0
+        gap = (current.event_date - previous.event_date).days
+        if prev_dist and curr_dist and gap < 56 and max(prev_dist, curr_dist) / max(1, min(prev_dist, curr_dist)) >= 3:
+            recommendations.append({
+                "severity": "medium",
+                "title": "Event demands do not align",
+                "body": f"{previous.name} and {current.name} ask for very different preparation within {gap} days. Keep the smaller one as a workout effort.",
+            })
+
+    return recommendations
+
+
+def _fallback_week(
+    event: TrainingEvent,
+    context: dict[str, Any],
+    options: dict[str, Any],
+    index: int,
+) -> dict[str, Any]:
+    target_distance = context["target_distance_km"] or 10
+    volume = _useful_weekly_floor(target_distance, options["days_per_week"])
+    long_run = _long_run_target(target_distance, volume, context["recent_long_run_km"] or 0, 0.0, 4)
+    intensity = _intensity_focus(index + 1, 4, context["readiness_score"], context["tsb"], target_distance, options["emphasis"])
+    return {
+        "week": index + 1,
+        "starts_on": (date.today() + timedelta(days=index * 7)).isoformat(),
+        "focus": intensity["focus"],
+        "target_km": round(volume, 1),
+        "long_run_km": round(long_run, 1),
+        "workouts": _week_workouts(volume, long_run, intensity, context, options),
+        "adjustment_note": intensity["note"],
+    }
+
+
+def _season_note(primary: TrainingEvent, supporting: list[str], base_note: str) -> str:
+    if supporting:
+        return f"{base_note} This week is aligned to {primary.name}; also keep {', '.join(supporting)} in view."
+    return f"{base_note} This is the single plan for the week, aligned to {primary.name}."
 
 
 def _week_workouts(

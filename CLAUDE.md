@@ -96,6 +96,8 @@ npm run build   # also type-checks frontend
 
 **Preparation planning**: `GET /preparation/events/{id}/plan` returns an adaptive, rule-based plan rather than a static stored plan. It uses the upcoming event, recent running load, latest CTL/ATL/TSB/readiness, target distance/time, weeks remaining, and user controls (`days_per_week`, `max_weekly_km`, `long_run_day`, `emphasis`). `POST /preparation/events/{id}/workouts/generate` persists the generated plan to `planned_workouts` so users can edit status/date/title/distance. `POST /preparation/events/{id}/discuss` gives rule-based explanations and constraint handling. Persist event intent and user calendar decisions; derive recommendations from current data.
 
+**Season alignment**: When multiple upcoming events overlap, the app must still produce only one training plan per week. `GET /preparation/season-plan` builds an aligned season view by selecting one primary event for each week and listing nearby supporting events. It flags conflicting calendars such as A/B races too close together, too many priority targets in six weeks, or events with very different demands in the same block. `POST /preparation/season-workouts/generate` saves this aligned one-plan-per-week calendar into future `planned_workouts`; `replace=true` replaces future planned workouts, not historical/completed calendar entries. Prefer season-level saving whenever more than one upcoming event exists.
+
 **Coach context and preparation**: The AI Coach prompt includes upcoming preparation targets and saved upcoming planned workouts, so coach answers can account for target events, accepted/completed/skipped workouts, and the current training calendar.
 
 ## Roadmap
@@ -131,7 +133,6 @@ Work on items in priority order unless instructed otherwise.
 - User constraints: run days per week, max weekly km, preferred long-run day, training emphasis.
 
 **Next improvements**:
-- Add explicit A/B/C race priority behavior.
 - Improve matching completed Garmin activities back to planned workouts automatically.
 - Upgrade plan discussion from rule-based replies to the existing Groq coach when the API key is available.
 - Add calendar export / notifications.

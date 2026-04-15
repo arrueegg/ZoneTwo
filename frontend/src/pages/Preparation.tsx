@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../api/client";
-import type { PlannedWorkout, PreparationPlan, TrainingEvent } from "../api/client";
+import type { PlannedWorkout, PreparationPlan, SeasonPlan, TrainingEvent } from "../api/client";
 import { useAthleteContext } from "../main";
 
 type EventForm = {
@@ -76,6 +76,17 @@ export function Preparation() {
     enabled: Boolean(selectedEventId),
   });
 
+  const { data: seasonPlan } = useQuery<SeasonPlan>({
+    queryKey: ["season-plan", athleteId, planOptions],
+    queryFn: async () => {
+      const { data } = await api.get("/preparation/season-plan", {
+        params: { athlete_id: athleteId, ...serializePlanOptions(planOptions) },
+      });
+      return data;
+    },
+    enabled: Boolean(athleteId),
+  });
+
   const { data: plannedWorkouts = [] } = useQuery<PlannedWorkout[]>({
     queryKey: ["planned-workouts", selectedEventId],
     queryFn: async () => {
@@ -111,6 +122,19 @@ export function Preparation() {
     },
   });
 
+  const saveSeasonPlan = useMutation({
+    mutationFn: async (replace: boolean) => {
+      const { data } = await api.post("/preparation/season-workouts/generate", null, {
+        params: { athlete_id: athleteId, ...serializePlanOptions(planOptions), replace },
+      });
+      return data as PlannedWorkout[];
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["planned-workouts"] });
+      queryClient.invalidateQueries({ queryKey: ["planned-workouts", selectedEventId] });
+    },
+  });
+
   const updateWorkout = useMutation({
     mutationFn: async ({ id, patch }: { id: string; patch: Partial<PlannedWorkout> }) => {
       const { data } = await api.patch(`/preparation/workouts/${id}`, patch);
@@ -130,6 +154,7 @@ export function Preparation() {
     },
     onSuccess: (event) => {
       queryClient.invalidateQueries({ queryKey: ["preparation-events", athleteId] });
+      queryClient.invalidateQueries({ queryKey: ["season-plan", athleteId] });
       setSelectedEventId(event.id);
       setForm(initialForm);
     },
@@ -141,6 +166,7 @@ export function Preparation() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["preparation-events", athleteId] });
+      queryClient.invalidateQueries({ queryKey: ["season-plan", athleteId] });
     },
   });
 
@@ -226,6 +252,7 @@ export function Preparation() {
             <PlanView
               event={selectedEvent}
               plan={plan}
+              seasonPlan={seasonPlan ?? null}
               options={planOptions}
               onOptionsChange={setPlanOptions}
               discussion={discussion}
@@ -240,6 +267,8 @@ export function Preparation() {
               plannedWorkouts={plannedWorkouts}
               onSavePlan={(replace) => savePlan.mutate(replace)}
               savingPlan={savePlan.isPending}
+              onSaveSeasonPlan={(replace) => saveSeasonPlan.mutate(replace)}
+              savingSeasonPlan={saveSeasonPlan.isPending}
               onUpdateWorkout={(id, patch) => updateWorkout.mutate({ id, patch })}
               updatingWorkout={updateWorkout.isPending}
               onDelete={() => deleteEvent.mutate(selectedEvent.id)}
@@ -253,11 +282,12 @@ export function Preparation() {
 }
 
 function PlanView({
-  event, plan, options, onOptionsChange, discussion, question, onQuestionChange, onAsk, discussing,
-  plannedWorkouts, onSavePlan, savingPlan, onUpdateWorkout, updatingWorkout, onDelete, deleting,
+  event, plan, seasonPlan, options, onOptionsChange, discussion, question, onQuestionChange, onAsk, discussing,
+  plannedWorkouts, onSavePlan, savingPlan, onSaveSeasonPlan, savingSeasonPlan, onUpdateWorkout, updatingWorkout, onDelete, deleting,
 }: {
   event: TrainingEvent;
   plan: PreparationPlan;
+  seasonPlan: SeasonPlan | null;
   options: PlanOptions;
   onOptionsChange: (options: PlanOptions) => void;
   discussion: Array<{ role: "user" | "plan"; text: string }>;
@@ -268,6 +298,8 @@ function PlanView({
   plannedWorkouts: PlannedWorkout[];
   onSavePlan: (replace: boolean) => void;
   savingPlan: boolean;
+  onSaveSeasonPlan: (replace: boolean) => void;
+  savingSeasonPlan: boolean;
   onUpdateWorkout: (id: string, patch: Partial<PlannedWorkout>) => void;
   updatingWorkout: boolean;
   onDelete: () => void;
@@ -323,6 +355,14 @@ function PlanView({
         <Select label="Long run day" value={options.long_run_day} onChange={(long_run_day) => onOptionsChange({ ...options, long_run_day })} options={["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]} />
         <Select label="Emphasis" value={options.emphasis} onChange={(emphasis) => onOptionsChange({ ...options, emphasis })} options={["balanced", "speed", "endurance", "conservative"]} />
       </div>
+
+      {seasonPlan && seasonPlan.events.length > 1 && (
+        <SeasonAlignment
+          seasonPlan={seasonPlan}
+          onSaveSeasonPlan={onSaveSeasonPlan}
+          savingSeasonPlan={savingSeasonPlan}
+        />
+      )}
 
       <h2 style={{ ...SECTION_TITLE, marginTop: 28 }}>Plan</h2>
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
@@ -393,6 +433,58 @@ function PlanView({
         </div>
       </div>
     </div>
+  );
+}
+
+function SeasonAlignment({
+  seasonPlan, onSaveSeasonPlan, savingSeasonPlan,
+}: {
+  seasonPlan: SeasonPlan;
+  onSaveSeasonPlan: (replace: boolean) => void;
+  savingSeasonPlan: boolean;
+}) {
+  return (
+    <section style={{ marginTop: 28 }}>
+      <h2 style={SECTION_TITLE}>Season Alignment</h2>
+      <p style={{ ...MUTED, marginTop: 0 }}>
+        One week can only have one plan. This aligned view chooses the primary event for each week and flags combinations that compete.
+      </p>
+      {seasonPlan.recommendations.length > 0 && (
+        <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
+          {seasonPlan.recommendations.map((rec, index) => (
+            <div key={`${rec.title}-${index}`} style={rec.severity === "high" ? HIGH_WARNING : WARNINGS}>
+              <strong>{rec.title}</strong>
+              <p style={{ margin: "4px 0 0" }}>{rec.body}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+        <button onClick={() => onSaveSeasonPlan(false)} disabled={savingSeasonPlan} style={PRIMARY_BTN}>
+          Save Aligned Season
+        </button>
+        <button onClick={() => onSaveSeasonPlan(true)} disabled={savingSeasonPlan} style={GHOST_BTN}>
+          {savingSeasonPlan ? "Saving..." : "Replace Calendar with Season"}
+        </button>
+      </div>
+      <div style={{ display: "grid", gap: 8 }}>
+        {seasonPlan.weeks.slice(0, 12).map((week) => (
+          <div key={week.week} style={SEASON_WEEK}>
+            <div>
+              <strong>Week {week.week}</strong>
+              <span style={{ display: "block", color: "#6b7280", fontSize: 12 }}>{formatDate(week.starts_on)}</span>
+            </div>
+            <div style={{ flex: 1 }}>
+              <strong>{week.primary_event_name}</strong>
+              <span style={{ display: "block", color: "#6b7280", fontSize: 12 }}>
+                {week.focus} · {week.target_km} km · long {week.long_run_km} km
+                {week.supporting_events.length > 0 ? ` · also ${week.supporting_events.join(", ")}` : ""}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -585,8 +677,10 @@ const HEADER_BAND: React.CSSProperties = { border: "1px solid #e5e7eb", borderRa
 const METRIC_GRID: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 };
 const METRIC: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column", gap: 6, fontSize: 12, color: "#6b7280" };
 const WARNINGS: React.CSSProperties = { border: "1px solid #fbbf24", borderRadius: 8, background: "#fffbeb", color: "#92400e", padding: 12, display: "grid", gap: 6, marginTop: 12, fontSize: 13 };
+const HIGH_WARNING: React.CSSProperties = { border: "1px solid #f87171", borderRadius: 8, background: "#fef2f2", color: "#991b1b", padding: 12, display: "grid", gap: 6, marginTop: 12, fontSize: 13 };
 const CONTROL_GRID: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, border: "1px solid #e5e7eb", borderRadius: 8, padding: 14 };
 const WEEK_ROW: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: 14, display: "flex", gap: 16, alignItems: "flex-start" };
+const SEASON_WEEK: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, display: "flex", gap: 12, alignItems: "flex-start", background: "#fff" };
 const WORKOUT_ROW: React.CSSProperties = { display: "grid", gap: 2, fontSize: 13, color: "#4b5563", borderLeft: "3px solid #bfdbfe", paddingLeft: 10 };
 const DISCUSS_BOX: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: 14, display: "grid", gap: 10 };
 const USER_MSG: React.CSSProperties = { justifySelf: "end", maxWidth: "85%", background: "#e0f2fe", color: "#075985", borderRadius: 8, padding: "8px 10px", fontSize: 13 };
