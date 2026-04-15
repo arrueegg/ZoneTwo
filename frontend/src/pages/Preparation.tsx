@@ -44,6 +44,7 @@ export function Preparation() {
     long_run_day: "Sun",
     emphasis: "balanced",
   });
+  const [activePanel, setActivePanel] = useState<"plan" | "calendar" | "discuss">("plan");
   const [discussion, setDiscussion] = useState<Array<{ role: "user" | "plan"; text: string }>>([]);
   const [question, setQuestion] = useState("");
 
@@ -199,53 +200,62 @@ export function Preparation() {
         )}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 360px), 1fr))", gap: 24, alignItems: "start" }}>
-        <section>
-          <h2 style={SECTION_TITLE}>Add Target</h2>
-          <form onSubmit={(e) => { e.preventDefault(); createEvent.mutate(); }} style={FORM}>
-            <Field label="Name" value={form.name} onChange={(name) => setForm((f) => ({ ...f, name }))} placeholder="City 10K" required />
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12 }}>
-              <Field label="Date" value={form.event_date} onChange={(event_date) => setForm((f) => ({ ...f, event_date }))} type="date" required />
-              <Select label="Priority" value={form.priority} onChange={(priority) => setForm((f) => ({ ...f, priority: priority as EventForm["priority"] }))} options={["A", "B", "C"]} />
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12 }}>
-              <Field label="Distance km" value={form.target_distance_km} onChange={(target_distance_km) => setForm((f) => ({ ...f, target_distance_km }))} type="number" placeholder="10" />
-              <Field label="Target time" value={form.target_time} onChange={(target_time) => setForm((f) => ({ ...f, target_time }))} placeholder="45:00" />
-            </div>
-            <Select label="Type" value={form.event_type} onChange={(event_type) => setForm((f) => ({ ...f, event_type }))} options={["race", "time trial", "long run", "trail"]} />
-            <Field label="Notes" value={form.notes} onChange={(notes) => setForm((f) => ({ ...f, notes }))} placeholder="Rolling course, tune-up race" />
-            <button type="submit" disabled={!form.name || !form.event_date || createEvent.isPending} style={PRIMARY_BTN}>
-              {createEvent.isPending ? "Adding..." : "Add Event"}
-            </button>
-          </form>
+      <PlanSettings options={planOptions} onOptionsChange={setPlanOptions} />
 
-          <h2 style={{ ...SECTION_TITLE, marginTop: 28 }}>Calendar</h2>
-          {isLoading && <p style={MUTED}>Loading events...</p>}
-          {!isLoading && calendarItems.length === 0 && <p style={MUTED}>No upcoming events yet.</p>}
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {calendarItems.map((event) => (
-              <button
-                key={event.id}
-                onClick={() => setSelectedEventId(event.id)}
-                style={{
-                  ...EVENT_ROW,
-                  borderColor: event.id === selectedEventId ? "#3B8BD4" : "#e5e7eb",
-                  background: event.id === selectedEventId ? "#f0f7ff" : "#fff",
-                }}
-              >
-                <span>
-                  <strong>{event.name}</strong>
-                  <span style={{ display: "block", color: "#6b7280", fontSize: 12 }}>
-                    {formatDate(event.event_date)} · {event.daysLeft} days · {event.priority} target
+      <div style={APP_LAYOUT}>
+        <aside style={SIDEBAR}>
+          <section style={PANEL}>
+            <h2 style={SECTION_TITLE}>Targets</h2>
+            {isLoading && <p style={MUTED}>Loading events...</p>}
+            {!isLoading && calendarItems.length === 0 && <p style={MUTED}>No upcoming events yet.</p>}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {calendarItems.map((event) => (
+                <button
+                  key={event.id}
+                  onClick={() => {
+                    setSelectedEventId(event.id);
+                    setActivePanel("plan");
+                  }}
+                  style={{
+                    ...EVENT_ROW,
+                    borderColor: event.id === selectedEventId ? "#3B8BD4" : "#e5e7eb",
+                    background: event.id === selectedEventId ? "#f0f7ff" : "#fff",
+                  }}
+                >
+                  <span>
+                    <strong>{event.name}</strong>
+                    <span style={{ display: "block", color: "#6b7280", fontSize: 12 }}>
+                      {formatDate(event.event_date)} · {event.daysLeft} days · {event.priority} target
+                    </span>
                   </span>
-                </span>
-                <span style={BADGE}>{event.target_distance_km ? `${event.target_distance_km} km` : event.event_type}</span>
-              </button>
-            ))}
-          </div>
-        </section>
+                  <span style={BADGE}>{event.target_distance_km ? `${event.target_distance_km} km` : event.event_type}</span>
+                </button>
+              ))}
+            </div>
+          </section>
 
-        <section>
+          <details style={PANEL}>
+            <summary style={SUMMARY}>Add Target</summary>
+            <form onSubmit={(e) => { e.preventDefault(); createEvent.mutate(); }} style={{ ...FORM, marginTop: 14 }}>
+              <Field label="Name" value={form.name} onChange={(name) => setForm((f) => ({ ...f, name }))} placeholder="City 10K" required />
+              <div style={TWO_COL}>
+                <Field label="Date" value={form.event_date} onChange={(event_date) => setForm((f) => ({ ...f, event_date }))} type="date" required />
+                <Select label="Priority" value={form.priority} onChange={(priority) => setForm((f) => ({ ...f, priority: priority as EventForm["priority"] }))} options={["A", "B", "C"]} />
+              </div>
+              <div style={TWO_COL}>
+                <Field label="Distance km" value={form.target_distance_km} onChange={(target_distance_km) => setForm((f) => ({ ...f, target_distance_km }))} type="number" placeholder="10" />
+                <Field label="Target time" value={form.target_time} onChange={(target_time) => setForm((f) => ({ ...f, target_time }))} placeholder="45:00" />
+              </div>
+              <Select label="Type" value={form.event_type} onChange={(event_type) => setForm((f) => ({ ...f, event_type }))} options={["race", "time trial", "long run", "trail"]} />
+              <Field label="Notes" value={form.notes} onChange={(notes) => setForm((f) => ({ ...f, notes }))} placeholder="Rolling course, tune-up race" />
+              <button type="submit" disabled={!form.name || !form.event_date || createEvent.isPending} style={PRIMARY_BTN}>
+                {createEvent.isPending ? "Adding..." : "Add Event"}
+              </button>
+            </form>
+          </details>
+        </aside>
+
+        <section style={MAIN_STACK}>
           {!selectedEvent && <EmptyPlan />}
           {selectedEvent && planLoading && <p style={MUTED}>Building plan...</p>}
           {selectedEvent && plan && (
@@ -253,8 +263,8 @@ export function Preparation() {
               event={selectedEvent}
               plan={plan}
               seasonPlan={seasonPlan ?? null}
-              options={planOptions}
-              onOptionsChange={setPlanOptions}
+              activePanel={activePanel}
+              onActivePanelChange={setActivePanel}
               discussion={discussion}
               question={question}
               onQuestionChange={setQuestion}
@@ -282,14 +292,14 @@ export function Preparation() {
 }
 
 function PlanView({
-  event, plan, seasonPlan, options, onOptionsChange, discussion, question, onQuestionChange, onAsk, discussing,
+  event, plan, seasonPlan, activePanel, onActivePanelChange, discussion, question, onQuestionChange, onAsk, discussing,
   plannedWorkouts, onSavePlan, savingPlan, onSaveSeasonPlan, savingSeasonPlan, onUpdateWorkout, updatingWorkout, onDelete, deleting,
 }: {
   event: TrainingEvent;
   plan: PreparationPlan;
   seasonPlan: SeasonPlan | null;
-  options: PlanOptions;
-  onOptionsChange: (options: PlanOptions) => void;
+  activePanel: "plan" | "calendar" | "discuss";
+  onActivePanelChange: (panel: "plan" | "calendar" | "discuss") => void;
   discussion: Array<{ role: "user" | "plan"; text: string }>;
   question: string;
   onQuestionChange: (value: string) => void;
@@ -307,7 +317,7 @@ function PlanView({
 }) {
   return (
     <div>
-      <div style={HEADER_BAND}>
+      <div style={{ ...HEADER_BAND, marginBottom: 12 }}>
         <div>
           <h2 style={{ margin: "0 0 6px", fontSize: 22 }}>{event.name}</h2>
           <p style={{ ...MUTED, margin: 0 }}>{plan.summary.headline} {plan.summary.target}</p>
@@ -328,7 +338,130 @@ function PlanView({
         </div>
       )}
 
-      <h2 style={{ ...SECTION_TITLE, marginTop: 28 }}>Adjust Plan</h2>
+      {seasonPlan && seasonPlan.events.length > 1 && (
+        <SeasonAlignment
+          seasonPlan={seasonPlan}
+          onSaveSeasonPlan={onSaveSeasonPlan}
+          savingSeasonPlan={savingSeasonPlan}
+        />
+      )}
+
+      <div style={TAB_BAR}>
+        {(["plan", "calendar", "discuss"] as const).map((panel) => (
+          <button
+            key={panel}
+            onClick={() => onActivePanelChange(panel)}
+            style={activePanel === panel ? ACTIVE_TAB_BTN : TAB_BTN}
+          >
+            {panel === "plan" ? "Plan" : panel === "calendar" ? "Calendar" : "Discuss"}
+          </button>
+        ))}
+      </div>
+
+      {activePanel === "plan" && (
+        <div style={PANEL}>
+          <div style={SECTION_HEADER}>
+            <div>
+              <h2 style={SECTION_TITLE}>Selected Plan</h2>
+              <p style={{ ...MUTED, margin: 0 }}>Review the week structure before saving it to the calendar.</p>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button onClick={() => onSavePlan(false)} disabled={savingPlan} style={PRIMARY_BTN}>
+                {plannedWorkouts.length ? "Keep Saved Calendar" : "Save Plan"}
+              </button>
+              <button onClick={() => onSavePlan(true)} disabled={savingPlan} style={GHOST_BTN}>
+                {savingPlan ? "Saving..." : "Replace"}
+              </button>
+            </div>
+          </div>
+          <div style={{ display: "grid", gap: 10 }}>
+            {plan.weeks.map((week) => (
+              <article key={week.week} style={WEEK_ROW}>
+                <div style={{ minWidth: 88 }}>
+                  <strong>Week {week.week}</strong>
+                  <span style={{ display: "block", color: "#6b7280", fontSize: 12 }}>{formatDate(week.starts_on)}</span>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
+                    <strong>{week.focus}</strong>
+                    <span style={BADGE}>{week.target_km} km</span>
+                    <span style={BADGE}>Long {week.long_run_km} km</span>
+                  </div>
+                  <p style={{ ...MUTED, margin: "0 0 10px" }}>{week.adjustment_note}</p>
+                  <div style={{ display: "grid", gap: 8 }}>
+                    {week.workouts.map((workout) => (
+                      <div key={`${week.week}-${workout.type}`} style={WORKOUT_ROW}>
+                        <strong>{workout.day} · {workout.title} · {workout.distance_km} km</strong>
+                        <span>{workout.description}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {activePanel === "calendar" && (
+        <div style={PANEL}>
+          <div style={SECTION_HEADER}>
+            <div>
+              <h2 style={SECTION_TITLE}>Workout Calendar</h2>
+              <p style={{ ...MUTED, margin: 0 }}>Edit dates, status, titles, and distances after saving a plan.</p>
+            </div>
+          </div>
+          <PlannedWorkoutCalendar
+            workouts={plannedWorkouts}
+            onUpdateWorkout={onUpdateWorkout}
+            updating={updatingWorkout}
+          />
+        </div>
+      )}
+
+      {activePanel === "discuss" && (
+        <div style={PANEL}>
+          <h2 style={SECTION_TITLE}>Discuss</h2>
+          <div style={DISCUSS_BOX}>
+            {discussion.length === 0 && (
+              <p style={{ ...MUTED, margin: 0 }}>Ask why a week is structured this way, tell the plan you are tired, or ask how to fit training into fewer days.</p>
+            )}
+            {discussion.map((item, index) => (
+              <div key={index} style={item.role === "user" ? USER_MSG : PLAN_MSG}>
+                {item.text}
+              </div>
+            ))}
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                value={question}
+                onChange={(event) => onQuestionChange(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") onAsk();
+                }}
+                placeholder="Why is the long run this distance?"
+                style={{ ...INPUT, flex: 1 }}
+              />
+              <button onClick={onAsk} disabled={discussing || !question.trim()} style={PRIMARY_BTN}>
+                {discussing ? "Thinking..." : "Ask"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PlanSettings({ options, onOptionsChange }: {
+  options: PlanOptions;
+  onOptionsChange: (options: PlanOptions) => void;
+}) {
+  return (
+    <section style={PLAN_SETTINGS}>
+      <div>
+        <h2 style={SECTION_TITLE}>Plan Settings</h2>
+        <p style={{ ...MUTED, margin: 0 }}>These apply to the selected plan and the aligned season.</p>
+      </div>
       <div style={CONTROL_GRID}>
         <label style={LABEL}>
           Run days
@@ -355,84 +488,7 @@ function PlanView({
         <Select label="Long run day" value={options.long_run_day} onChange={(long_run_day) => onOptionsChange({ ...options, long_run_day })} options={["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]} />
         <Select label="Emphasis" value={options.emphasis} onChange={(emphasis) => onOptionsChange({ ...options, emphasis })} options={["balanced", "speed", "endurance", "conservative"]} />
       </div>
-
-      {seasonPlan && seasonPlan.events.length > 1 && (
-        <SeasonAlignment
-          seasonPlan={seasonPlan}
-          onSaveSeasonPlan={onSaveSeasonPlan}
-          savingSeasonPlan={savingSeasonPlan}
-        />
-      )}
-
-      <h2 style={{ ...SECTION_TITLE, marginTop: 28 }}>Plan</h2>
-      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-        <button onClick={() => onSavePlan(false)} disabled={savingPlan} style={PRIMARY_BTN}>
-          {plannedWorkouts.length ? "Keep Saved Calendar" : "Save Plan to Calendar"}
-        </button>
-        <button onClick={() => onSavePlan(true)} disabled={savingPlan} style={GHOST_BTN}>
-          {savingPlan ? "Saving..." : "Replace Saved Calendar"}
-        </button>
-      </div>
-      <div style={{ display: "grid", gap: 12 }}>
-        {plan.weeks.map((week) => (
-          <article key={week.week} style={WEEK_ROW}>
-            <div style={{ minWidth: 88 }}>
-              <strong>Week {week.week}</strong>
-              <span style={{ display: "block", color: "#6b7280", fontSize: 12 }}>{formatDate(week.starts_on)}</span>
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
-                <strong>{week.focus}</strong>
-                <span style={BADGE}>{week.target_km} km</span>
-                <span style={BADGE}>Long {week.long_run_km} km</span>
-              </div>
-              <p style={{ ...MUTED, margin: "0 0 10px" }}>{week.adjustment_note}</p>
-              <div style={{ display: "grid", gap: 8 }}>
-                {week.workouts.map((workout) => (
-                  <div key={`${week.week}-${workout.type}`} style={WORKOUT_ROW}>
-                    <strong>{workout.day} · {workout.title} · {workout.distance_km} km</strong>
-                    <span>{workout.description}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </article>
-        ))}
-      </div>
-
-      <h2 style={{ ...SECTION_TITLE, marginTop: 28 }}>Workout Calendar</h2>
-      <PlannedWorkoutCalendar
-        workouts={plannedWorkouts}
-        onUpdateWorkout={onUpdateWorkout}
-        updating={updatingWorkout}
-      />
-
-      <h2 style={{ ...SECTION_TITLE, marginTop: 28 }}>Discuss</h2>
-      <div style={DISCUSS_BOX}>
-        {discussion.length === 0 && (
-          <p style={{ ...MUTED, margin: 0 }}>Ask why a week is structured this way, tell the plan you are tired, or ask how to fit training into fewer days.</p>
-        )}
-        {discussion.map((item, index) => (
-          <div key={index} style={item.role === "user" ? USER_MSG : PLAN_MSG}>
-            {item.text}
-          </div>
-        ))}
-        <div style={{ display: "flex", gap: 8 }}>
-          <input
-            value={question}
-            onChange={(event) => onQuestionChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") onAsk();
-            }}
-            placeholder="Why is the long run this distance?"
-            style={{ ...INPUT, flex: 1 }}
-          />
-          <button onClick={onAsk} disabled={discussing || !question.trim()} style={PRIMARY_BTN}>
-            {discussing ? "Thinking..." : "Ask"}
-          </button>
-        </div>
-      </div>
-    </div>
+    </section>
   );
 }
 
@@ -665,6 +721,14 @@ const PAGE: React.CSSProperties = {
 const TITLE: React.CSSProperties = { margin: "0 0 6px", fontSize: 28 };
 const SECTION_TITLE: React.CSSProperties = { fontSize: 15, fontWeight: 700, margin: "0 0 12px" };
 const MUTED: React.CSSProperties = { color: "#6b7280", fontSize: 14 };
+const APP_LAYOUT: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))", gap: 18, alignItems: "start" };
+const SIDEBAR: React.CSSProperties = { display: "grid", gap: 12, alignSelf: "start" };
+const MAIN_STACK: React.CSSProperties = { display: "grid", gap: 14, minWidth: 0 };
+const PANEL: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: 14, background: "#fff" };
+const PLAN_SETTINGS: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: 14, marginBottom: 18, display: "grid", gap: 12, background: "#fff" };
+const SECTION_HEADER: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: 14, alignItems: "flex-start", marginBottom: 12, flexWrap: "wrap" };
+const TWO_COL: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 10 };
+const SUMMARY: React.CSSProperties = { cursor: "pointer", fontSize: 15, fontWeight: 700, color: "#111827" };
 const FORM: React.CSSProperties = { display: "flex", flexDirection: "column", gap: 12 };
 const LABEL: React.CSSProperties = { display: "flex", flexDirection: "column", gap: 5, color: "#374151", fontSize: 13, fontWeight: 600 };
 const INPUT: React.CSSProperties = { border: "1px solid #d1d5db", borderRadius: 6, padding: "9px 10px", fontSize: 14, fontWeight: 400, background: "#fff" };
@@ -679,6 +743,9 @@ const METRIC: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius:
 const WARNINGS: React.CSSProperties = { border: "1px solid #fbbf24", borderRadius: 8, background: "#fffbeb", color: "#92400e", padding: 12, display: "grid", gap: 6, marginTop: 12, fontSize: 13 };
 const HIGH_WARNING: React.CSSProperties = { border: "1px solid #f87171", borderRadius: 8, background: "#fef2f2", color: "#991b1b", padding: 12, display: "grid", gap: 6, marginTop: 12, fontSize: 13 };
 const CONTROL_GRID: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, border: "1px solid #e5e7eb", borderRadius: 8, padding: 14 };
+const TAB_BAR: React.CSSProperties = { display: "flex", gap: 8, marginTop: 16, marginBottom: 0, flexWrap: "wrap" };
+const TAB_BTN: React.CSSProperties = { background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 6, padding: "9px 14px", cursor: "pointer", fontWeight: 700 };
+const ACTIVE_TAB_BTN: React.CSSProperties = { ...TAB_BTN, background: "#e8f3ff", color: "#1f5f99", borderColor: "#3B8BD4" };
 const WEEK_ROW: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: 14, display: "flex", gap: 16, alignItems: "flex-start" };
 const SEASON_WEEK: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, display: "flex", gap: 12, alignItems: "flex-start", background: "#fff" };
 const WORKOUT_ROW: React.CSSProperties = { display: "grid", gap: 2, fontSize: 13, color: "#4b5563", borderLeft: "3px solid #bfdbfe", paddingLeft: 10 };
