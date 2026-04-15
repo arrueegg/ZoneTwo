@@ -29,9 +29,10 @@ function fmtPace(sec_km: number | null | undefined): string {
 
 function fmtDuration(sec: number | null | undefined): string {
   if (!sec) return "—";
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  const s = sec % 60;
+  const totalSec = Math.round(sec);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
   if (h > 0) return `${h}h ${m}m`;
   return `${m}m ${s}s`;
 }
@@ -39,6 +40,12 @@ function fmtDuration(sec: number | null | undefined): string {
 function fmtDist(m: number | null | undefined): string {
   if (!m) return "—";
   return `${(m / 1000).toFixed(1)} km`;
+}
+
+function distanceM(a: Pick<TrackPoint, "lat" | "lon">, b: Pick<TrackPoint, "lat" | "lon">): number {
+  const dlat = (b.lat - a.lat) * 111320;
+  const dlon = (b.lon - a.lon) * 111320 * Math.cos(a.lat * Math.PI / 180);
+  return Math.sqrt(dlat * dlat + dlon * dlon);
 }
 
 // ── GPS map component (lazy-loads Leaflet) ────────────────────────────────────
@@ -95,6 +102,111 @@ function GpsMap({ points }: { points: TrackPoint[] }) {
 
 // ── intraday charts ───────────────────────────────────────────────────────────
 
+type ChartPoint = {
+  dist: number;
+  hr: number | null;
+  ele: number | null;
+  pace: number | null;
+  cadence: number | null;
+};
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+function localMedian(values: Array<number | null>, index: number, radius: number): number | null {
+  const nearby = values
+    .slice(Math.max(0, index - radius), Math.min(values.length, index + radius + 1))
+    .filter((v): v is number => v != null);
+
+  return nearby.length >= 3 ? median(nearby) : null;
+}
+
+function removeCadenceOutliers(values: Array<number | null>): Array<number | null> {
+  const plausible = values.filter((value): value is number => value != null && value >= 30 && value <= 260);
+  if (plausible.length < 8) {
+    return values.map((value) => value != null && value >= 30 && value <= 260 ? value : null);
+  }
+
+  const sorted = [...plausible].sort((a, b) => a - b);
+  const q1 = sorted[Math.floor(sorted.length * 0.25)];
+  const q3 = sorted[Math.floor(sorted.length * 0.75)];
+  const iqr = Math.max(1, q3 - q1);
+  const low = Math.max(30, q1 - iqr * 2.5);
+  const high = Math.min(260, q3 + iqr * 2.5);
+
+  return values.map((value, i) => {
+    if (value == null || value < low || value > high) return null;
+
+    const localMedianValue = localMedian(values, i, 3);
+    if (localMedianValue == null) return value;
+
+    return Math.abs(value - localMedianValue) > Math.max(18, localMedianValue * 0.14) ? null : value;
+  });
+}
+
+function isSustainedPaceJump(values: Array<number | null>, boundary: number): boolean {
+  const before = values.slice(Math.max(0, boundary - 5), boundary).filter((v): v is number => v != null);
+  const after = values.slice(boundary, Math.min(values.length, boundary + 5)).filter((v): v is number => v != null);
+
+  if (before.length < 3 || after.length < 3) return false;
+
+  const beforeMedian = median(before);
+  const afterMedian = median(after);
+  const delta = Math.abs(beforeMedian - afterMedian);
+  const relativeDelta = delta / Math.max(1, Math.min(beforeMedian, afterMedian));
+
+  return delta > 30 && relativeDelta > 0.10;
+}
+
+function smoothPace(points: ChartPoint[]): Array<number | null> {
+  const values = points.map((p) => p.pace);
+  const despiked = values.map((value, i) => {
+    if (value == null) return null;
+
+    const localMedianValue = localMedian(values, i, 3);
+    if (localMedianValue == null) return value;
+
+    const delta = Math.abs(value - localMedianValue);
+    const relativeDelta = delta / Math.max(1, localMedianValue);
+
+    return delta > 45 && relativeDelta > 0.16 ? localMedianValue : value;
+  });
+
+  const boundaries = despiked.map((_, i) => i > 0 && isSustainedPaceJump(despiked, i));
+  const smoothingDistanceKm = 0.2;
+
+  return despiked.map((value, i) => {
+    if (value == null) return null;
+
+    let start = i;
+    while (start > 0 && !boundaries[start] && points[i].dist - points[start - 1].dist <= smoothingDistanceKm) {
+      start -= 1;
+    }
+
+    let end = i;
+    while (end < despiked.length - 1 && !boundaries[end + 1] && points[end + 1].dist - points[i].dist <= smoothingDistanceKm) {
+      end += 1;
+    }
+
+    let total = 0;
+    let weightTotal = 0;
+    for (let j = start; j <= end; j += 1) {
+      const pace = despiked[j];
+      if (pace == null) continue;
+
+      const distance = Math.abs(points[j].dist - points[i].dist);
+      const weight = Math.max(0.2, 1 - distance / smoothingDistanceKm);
+      total += pace * weight;
+      weightTotal += weight;
+    }
+
+    return weightTotal > 0 ? Math.round(total / weightTotal) : value;
+  });
+}
+
 function buildChartData(points: TrackPoint[]) {
   // Downsample to ~500 points for performance
   const step = Math.max(1, Math.floor(points.length / 500));
@@ -102,24 +214,34 @@ function buildChartData(points: TrackPoint[]) {
 
   // Compute cumulative distance from lat/lon
   let cumDist = 0;
-  return sampled.map((p, i) => {
+  const data: ChartPoint[] = sampled.map((p, i) => {
     if (i > 0) {
       const prev = sampled[i - 1];
-      const dlat = (p.lat - prev.lat) * 111320;
-      const dlon = (p.lon - prev.lon) * 111320 * Math.cos(prev.lat * Math.PI / 180);
-      cumDist += Math.sqrt(dlat * dlat + dlon * dlon);
+      cumDist += distanceM(prev, p);
     }
     return {
-      dist: Math.round(cumDist / 100) / 10,   // km, 1 decimal
+      dist: Math.round(cumDist) / 1000,
       hr: p.hr ?? null,
       ele: p.ele ?? null,
       pace: p.pace_sec_km ?? null,
       cadence: p.cadence ?? null,
     };
   });
+
+  const smoothedPace = smoothPace(data);
+  const cleanedCadence = removeCadenceOutliers(data.map((d) => d.cadence));
+  return data.map((d, i) => ({ ...d, pace: smoothedPace[i], cadence: cleanedCadence[i] }));
 }
 
 const tick = { fontSize: 11, fill: "#9ca3af" };
+
+function fmtChartKm(value: number | string): string {
+  return Number(value).toFixed(1);
+}
+
+function fmtChartKmTooltip(value: number | string): string {
+  return `${Number(value).toFixed(2)} km`;
+}
 
 function IntradayCharts({ points }: { points: TrackPoint[] }) {
   const data = buildChartData(points);
@@ -141,9 +263,9 @@ function IntradayCharts({ points }: { points: TrackPoint[] }) {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="dist" tick={tick} unit=" km" />
+              <XAxis dataKey="dist" tick={tick} unit=" km" tickFormatter={fmtChartKm} />
               <YAxis tick={tick} unit=" m" width={40} />
-              <Tooltip formatter={(v: number) => [`${v.toFixed(0)} m`, "Elevation"]} labelFormatter={(v) => `${v} km`} />
+              <Tooltip formatter={(v: number) => [`${v.toFixed(0)} m`, "Elevation"]} labelFormatter={fmtChartKmTooltip} />
               <Area dataKey="ele" stroke="#7c3aed" fill="url(#eleGrad)" strokeWidth={1.5} dot={false} connectNulls name="Elevation" />
             </AreaChart>
           </ResponsiveContainer>
@@ -155,9 +277,9 @@ function IntradayCharts({ points }: { points: TrackPoint[] }) {
           <ResponsiveContainer width="100%" height={160}>
             <LineChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="dist" tick={tick} unit=" km" />
+              <XAxis dataKey="dist" tick={tick} unit=" km" tickFormatter={fmtChartKm} />
               <YAxis tick={tick} unit=" bpm" domain={["auto", "auto"]} width={44} />
-              <Tooltip formatter={(v: number) => [`${v} bpm`, "HR"]} labelFormatter={(v) => `${v} km`} />
+              <Tooltip formatter={(v: number) => [`${v} bpm`, "HR"]} labelFormatter={fmtChartKmTooltip} />
               <Line dataKey="hr" stroke="#ef4444" strokeWidth={1.5} dot={false} connectNulls name="HR" />
             </LineChart>
           </ResponsiveContainer>
@@ -169,7 +291,7 @@ function IntradayCharts({ points }: { points: TrackPoint[] }) {
           <ResponsiveContainer width="100%" height={160}>
             <LineChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="dist" tick={tick} unit=" km" />
+              <XAxis dataKey="dist" tick={tick} unit=" km" tickFormatter={fmtChartKm} />
               <YAxis
                 tick={tick}
                 reversed
@@ -179,7 +301,7 @@ function IntradayCharts({ points }: { points: TrackPoint[] }) {
               />
               <Tooltip
                 formatter={(v: number) => [fmtPace(v), "Pace"]}
-                labelFormatter={(v) => `${v} km`}
+                labelFormatter={fmtChartKmTooltip}
               />
               <Line dataKey="pace" stroke="#3b82f6" strokeWidth={1.5} dot={false} connectNulls name="Pace" />
             </LineChart>
@@ -192,9 +314,9 @@ function IntradayCharts({ points }: { points: TrackPoint[] }) {
           <ResponsiveContainer width="100%" height={140}>
             <LineChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="dist" tick={tick} unit=" km" />
+              <XAxis dataKey="dist" tick={tick} unit=" km" tickFormatter={fmtChartKm} />
               <YAxis tick={tick} unit=" spm" domain={["auto", "auto"]} width={44} />
-              <Tooltip formatter={(v: number) => [`${v} spm`, "Cadence"]} labelFormatter={(v) => `${v} km`} />
+              <Tooltip formatter={(v: number) => [`${v} spm`, "Cadence"]} labelFormatter={fmtChartKmTooltip} />
               <Line dataKey="cadence" stroke="#f59e0b" strokeWidth={1.5} dot={false} connectNulls name="Cadence" />
             </LineChart>
           </ResponsiveContainer>
@@ -397,7 +519,7 @@ export function ActivityDetail() {
 
       {/* Splits */}
       {track && track.splits.length > 0 && (
-        <Section title={`Splits (${track.splits.length})`}>
+        <Section title="Splits">
           <SplitsTable splits={track.splits} />
         </Section>
       )}
