@@ -361,7 +361,7 @@ function TargetManager({
   deletingEvent: boolean;
 }) {
   return (
-    <div style={TARGET_LAYOUT}>
+    <div style={TARGET_STACK}>
       <div>
         <h3 style={SMALL_HEADING}>Targets</h3>
         {events.length === 0 && <p style={MUTED}>No upcoming events yet.</p>}
@@ -383,7 +383,7 @@ function TargetManager({
         </div>
       </div>
 
-      <details style={ADD_TARGET_PANEL}>
+      <details style={{ ...ADD_TARGET_PANEL, maxWidth: 560 }}>
         <summary style={SUMMARY}>Add Target</summary>
         <form onSubmit={(event) => { event.preventDefault(); onCreateEvent(); }} style={{ ...FORM, marginTop: 14 }}>
           <Field label="Name" value={form.name} onChange={(name) => onFormChange({ ...form, name })} placeholder="City 10K" required />
@@ -881,7 +881,7 @@ const TITLE: React.CSSProperties = { margin: "0 0 6px", fontSize: 28 };
 const SECTION_TITLE: React.CSSProperties = { fontSize: 15, fontWeight: 700, margin: "0 0 12px" };
 const MUTED: React.CSSProperties = { color: "#6b7280", fontSize: 14 };
 const PANEL: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: 14, background: "#fff" };
-const TARGET_LAYOUT: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))", gap: 14, alignItems: "start", marginBottom: 14 };
+const TARGET_STACK: React.CSSProperties = { display: "grid", gap: 18, marginBottom: 14 };
 const ADD_TARGET_PANEL: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, padding: 14, background: "#f9fafb" };
 const COMMAND_BAR: React.CSSProperties = { border: "1px solid #dbeafe", borderRadius: 8, padding: 14, marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, flexWrap: "wrap", background: "#f8fbff" };
 const COMMAND_META: React.CSSProperties = { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" };
