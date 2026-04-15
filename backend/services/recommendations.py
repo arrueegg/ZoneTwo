@@ -180,6 +180,12 @@ distance={week_data['distance_km']:.1f}km, time={week_data['duration_hours']:.1f
 ATL={week_data['atl']:.1f}, CTL={week_data['ctl']:.1f}, TSB={week_data['tsb']:.1f}
 HRV={week_data['hrv_trend']}, sleep={week_data['avg_sleep_score']}
 
+Targets and preparation:
+- Upcoming targets: {week_data.get('target_context', 'not available')}
+- Current phase: {week_data.get('phase_context', 'not available')}
+- Saved preparation plan: {week_data.get('plan_context', 'not available')}
+- On-track check: {week_data.get('on_track_context', 'not available')}
+
 Coaching context:
 - Load/form: {load_context}
 - Sleep/recovery: {sleep_context}
@@ -196,6 +202,9 @@ Rules:
 - Every bullet must include at least one judgement, implication, or concrete action
 - Use numbers only when they support a coaching decision; do not list metrics just to list them
 - Do not write bullets that merely restate distance, time, CTL, ATL, TSB, HRV, sleep, or zone distribution
+- Judge whether the athlete appears on track for the saved preparation targets when target/plan context is available
+- Mention the current preparation phase when it changes the recommendation
+- Compare completed activities with saved planned workouts when plan adherence context is available
 - Make at least one clear recommendation for what to do next week
 - Use plain coaching language: "good time to push", "hold steady", "back off", "add one quality day", "keep this easy", etc.
 - No markdown bold and no headers"""
